@@ -309,9 +309,9 @@ async function startBenchmarkRecording() {
 
 function stopBenchmarkRecording() {
     // Stop render loop
-    if (typeof renderLoopId !== 'undefined' && renderLoopId !== null) {
-        cancelAnimationFrame(renderLoopId);
-        renderLoopId = null;
+    if (benchmarkRenderLoopId !== null) {
+        cancelAnimationFrame(benchmarkRenderLoopId);
+        benchmarkRenderLoopId = null;
     }
     
     if (benchmarkCamera) {
@@ -523,9 +523,9 @@ async function startUserRecording() {
 
 function stopUserRecording() {
     // Stop render loop
-    if (typeof renderLoopId !== 'undefined' && renderLoopId !== null) {
-        cancelAnimationFrame(renderLoopId);
-        renderLoopId = null;
+    if (userRenderLoopId !== null) {
+        cancelAnimationFrame(userRenderLoopId);
+        userRenderLoopId = null;
     }
     
     if (userCamera) {
