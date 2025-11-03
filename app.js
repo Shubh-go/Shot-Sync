@@ -165,16 +165,28 @@ async function startBenchmarkRecording() {
         document.getElementById('benchmarkStatus').textContent = 'Recording...';
         document.getElementById('benchmarkStatus').className = 'status recording';
         
+        // Separate rendering loop for continuous video display
+        const renderLoop = () => {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                ctx.save();
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                ctx.restore();
+            }
+            requestAnimationFrame(renderLoop);
+        };
+        renderLoop();
+        
+        // Store current pose landmarks for drawing
+        let currentPoseLandmarks = null;
+        
         benchmarkPose.onResults((results) => {
-            ctx.save();
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Always draw from video element first to ensure continuous video
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // Then overlay pose detection if available
+            // Store landmarks for rendering
+            currentPoseLandmarks = results.poseLandmarks;
             
             if (results.poseLandmarks) {
+                // Draw pose overlay on top of video
+                ctx.save();
                 drawConnections(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
                     color: '#00FF00',
                     lineWidth: 2
@@ -255,9 +267,8 @@ async function startBenchmarkRecording() {
                         }
                     }
                 }
+                ctx.restore();
             }
-            
-            ctx.restore();
         });
         
         // Use MediaPipe Camera utility for proper frame processing
@@ -351,16 +362,28 @@ async function startUserRecording() {
         document.getElementById('userStatus').textContent = 'Recording...';
         document.getElementById('userStatus').className = 'status recording';
         
+        // Separate rendering loop for continuous video display
+        const renderLoop = () => {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                ctx.save();
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                ctx.restore();
+            }
+            requestAnimationFrame(renderLoop);
+        };
+        renderLoop();
+        
+        // Store current pose landmarks for drawing
+        let currentPoseLandmarks = null;
+        
         userPose.onResults((results) => {
-            ctx.save();
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Always draw from video element first to ensure continuous video
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // Then overlay pose detection if available
+            // Store landmarks for rendering
+            currentPoseLandmarks = results.poseLandmarks;
             
             if (results.poseLandmarks) {
+                // Draw pose overlay on top of video
+                ctx.save();
                 drawConnections(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
                     color: '#00FF00',
                     lineWidth: 2
@@ -437,9 +460,8 @@ async function startUserRecording() {
                         }
                     }
                 }
+                ctx.restore();
             }
-            
-            ctx.restore();
         });
         
         // Use MediaPipe Camera utility for proper frame processing
