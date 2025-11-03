@@ -169,13 +169,10 @@ async function startBenchmarkRecording() {
             ctx.save();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Draw video frame
-            if (results.image) {
-                ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-            } else {
-                // Fallback: draw from video element
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            }
+            // Always draw from video element first to ensure continuous video
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Then overlay pose detection if available
             
             if (results.poseLandmarks) {
                 drawConnections(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
@@ -266,12 +263,10 @@ async function startBenchmarkRecording() {
         // Use MediaPipe Camera utility for proper frame processing
         benchmarkCamera = new Camera(video, {
             onFrame: async () => {
-                if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
-                    try {
-                        await benchmarkPose.send({image: video});
-                    } catch (error) {
-                        console.error('Error processing frame:', error);
-                    }
+                try {
+                    await benchmarkPose.send({image: video});
+                } catch (error) {
+                    console.error('Error processing frame:', error);
                 }
             },
             width: 640,
@@ -360,13 +355,10 @@ async function startUserRecording() {
             ctx.save();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Draw video frame
-            if (results.image) {
-                ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-            } else {
-                // Fallback: draw from video element
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            }
+            // Always draw from video element first to ensure continuous video
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Then overlay pose detection if available
             
             if (results.poseLandmarks) {
                 drawConnections(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
@@ -453,12 +445,10 @@ async function startUserRecording() {
         // Use MediaPipe Camera utility for proper frame processing
         userCamera = new Camera(video, {
             onFrame: async () => {
-                if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
-                    try {
-                        await userPose.send({image: video});
-                    } catch (error) {
-                        console.error('Error processing frame:', error);
-                    }
+                try {
+                    await userPose.send({image: video});
+                } catch (error) {
+                    console.error('Error processing frame:', error);
                 }
             },
             width: 640,
