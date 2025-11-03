@@ -27,6 +27,49 @@ const POSE_CONNECTIONS = [
     [24, 26], [26, 28], [28, 30], [30, 32], [32, 28]
 ];
 
+// Simple drawing functions if MediaPipe's aren't available
+function drawConnections(ctx, landmarks, connections, options = {}) {
+    const color = options.color || '#00FF00';
+    const lineWidth = options.lineWidth || 2;
+    
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.beginPath();
+    
+    for (const [startIdx, endIdx] of connections) {
+        if (startIdx < landmarks.length && endIdx < landmarks.length) {
+            const start = landmarks[startIdx];
+            const end = landmarks[endIdx];
+            if (start && end && start.visibility > 0.5 && end.visibility > 0.5) {
+                ctx.moveTo(start.x * ctx.canvas.width, start.y * ctx.canvas.height);
+                ctx.lineTo(end.x * ctx.canvas.width, end.y * ctx.canvas.height);
+            }
+        }
+    }
+    ctx.stroke();
+}
+
+function drawLandmarks(ctx, landmarks, options = {}) {
+    const color = options.color || '#00FF00';
+    const radius = options.radius || 3;
+    
+    ctx.fillStyle = color;
+    
+    for (const landmark of landmarks) {
+        if (landmark && landmark.visibility > 0.5) {
+            ctx.beginPath();
+            ctx.arc(
+                landmark.x * ctx.canvas.width,
+                landmark.y * ctx.canvas.height,
+                radius,
+                0,
+                2 * Math.PI
+            );
+            ctx.fill();
+        }
+    }
+}
+
 // ====================== MEDIAPIPE SETUP ======================
 
 function initializePose() {
