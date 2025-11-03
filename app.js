@@ -263,16 +263,20 @@ async function startBenchmarkRecording() {
             ctx.restore();
         });
         
-        benchmarkCamera = new Camera(video, {
-            onFrame: async () => {
-                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        // Set up MediaPipe processing loop
+        const processFrame = async () => {
+            if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
+                try {
                     await benchmarkPose.send({image: video});
+                } catch (error) {
+                    console.error('Error processing frame:', error);
                 }
-            },
-            width: 640,
-            height: 480
-        });
-        benchmarkCamera.start();
+            }
+            benchmarkFrameId = requestAnimationFrame(processFrame);
+        };
+        
+        // Start processing frames
+        processFrame();
         
     } catch (error) {
         console.error('Error accessing camera:', error);
@@ -282,6 +286,11 @@ async function startBenchmarkRecording() {
 }
 
 function stopBenchmarkRecording() {
+    if (benchmarkFrameId) {
+        cancelAnimationFrame(benchmarkFrameId);
+        benchmarkFrameId = null;
+    }
+    
     if (benchmarkCamera) {
         benchmarkCamera.stop();
         benchmarkCamera = null;
@@ -445,16 +454,20 @@ async function startUserRecording() {
             ctx.restore();
         });
         
-        userCamera = new Camera(video, {
-            onFrame: async () => {
-                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        // Set up MediaPipe processing loop
+        const processFrame = async () => {
+            if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
+                try {
                     await userPose.send({image: video});
+                } catch (error) {
+                    console.error('Error processing frame:', error);
                 }
-            },
-            width: 640,
-            height: 480
-        });
-        userCamera.start();
+            }
+            requestAnimationFrame(processFrame);
+        };
+        
+        // Start processing frames
+        processFrame();
         
     } catch (error) {
         console.error('Error accessing camera:', error);
@@ -464,6 +477,11 @@ async function startUserRecording() {
 }
 
 function stopUserRecording() {
+    if (userFrameId) {
+        cancelAnimationFrame(userFrameId);
+        userFrameId = null;
+    }
+    
     if (userCamera) {
         userCamera.stop();
         userCamera = null;
@@ -717,6 +735,8 @@ function retakeUser() {
 }
 
 function resetApp() {
+    if (benchmarkFrameId) cancelAnimationFrame(benchmarkFrameId);
+    if (userFrameId) cancelAnimationFrame(userFrameId);
     if (benchmarkCamera) benchmarkCamera.stop();
     if (userCamera) userCamera.stop();
     if (benchmarkStream) benchmarkStream.getTracks().forEach(track => track.stop());
