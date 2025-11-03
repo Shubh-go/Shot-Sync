@@ -463,7 +463,7 @@ async function startUserRecording() {
                     console.error('Error processing frame:', error);
                 }
             }
-            requestAnimationFrame(processFrame);
+            userFrameId = requestAnimationFrame(processFrame);
         };
         
         // Start processing frames
