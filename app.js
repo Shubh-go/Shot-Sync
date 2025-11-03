@@ -165,37 +165,39 @@ async function startBenchmarkRecording() {
         document.getElementById('benchmarkStatus').textContent = 'Recording...';
         document.getElementById('benchmarkStatus').className = 'status recording';
         
+        // Store current pose landmarks for drawing
+        let currentPoseLandmarks = null;
+        
         // Separate rendering loop for continuous video display
         const renderLoop = () => {
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
                 ctx.save();
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                // Draw pose overlay if available
+                if (currentPoseLandmarks) {
+                    drawConnections(ctx, currentPoseLandmarks, POSE_CONNECTIONS, {
+                        color: '#00FF00',
+                        lineWidth: 2
+                    });
+                    drawLandmarks(ctx, currentPoseLandmarks, {
+                        color: '#00FF00',
+                        lineWidth: 1,
+                        radius: 3
+                    });
+                }
                 ctx.restore();
             }
             requestAnimationFrame(renderLoop);
         };
         renderLoop();
         
-        // Store current pose landmarks for drawing
-        let currentPoseLandmarks = null;
-        
         benchmarkPose.onResults((results) => {
             // Store landmarks for rendering
             currentPoseLandmarks = results.poseLandmarks;
             
             if (results.poseLandmarks) {
-                // Draw pose overlay on top of video
-                ctx.save();
-                drawConnections(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
-                    color: '#00FF00',
-                    lineWidth: 2
-                });
-                drawLandmarks(ctx, results.poseLandmarks, {
-                    color: '#00FF00',
-                    lineWidth: 1,
-                    radius: 3
-                });
                 
                 const state = getArmState(results.poseLandmarks, canvas.width, canvas.height);
                 const currentTime = Date.now() / 1000.0;
@@ -267,7 +269,6 @@ async function startBenchmarkRecording() {
                         }
                     }
                 }
-                ctx.restore();
             }
         });
         
@@ -362,37 +363,39 @@ async function startUserRecording() {
         document.getElementById('userStatus').textContent = 'Recording...';
         document.getElementById('userStatus').className = 'status recording';
         
+        // Store current pose landmarks for drawing
+        let currentPoseLandmarks = null;
+        
         // Separate rendering loop for continuous video display
         const renderLoop = () => {
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
                 ctx.save();
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                // Draw pose overlay if available
+                if (currentPoseLandmarks) {
+                    drawConnections(ctx, currentPoseLandmarks, POSE_CONNECTIONS, {
+                        color: '#00FF00',
+                        lineWidth: 2
+                    });
+                    drawLandmarks(ctx, currentPoseLandmarks, {
+                        color: '#00FF00',
+                        lineWidth: 1,
+                        radius: 3
+                    });
+                }
                 ctx.restore();
             }
             requestAnimationFrame(renderLoop);
         };
         renderLoop();
         
-        // Store current pose landmarks for drawing
-        let currentPoseLandmarks = null;
-        
         userPose.onResults((results) => {
             // Store landmarks for rendering
             currentPoseLandmarks = results.poseLandmarks;
             
             if (results.poseLandmarks) {
-                // Draw pose overlay on top of video
-                ctx.save();
-                drawConnections(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
-                    color: '#00FF00',
-                    lineWidth: 2
-                });
-                drawLandmarks(ctx, results.poseLandmarks, {
-                    color: '#00FF00',
-                    lineWidth: 1,
-                    radius: 3
-                });
                 
                 const state = getArmState(results.poseLandmarks, canvas.width, canvas.height);
                 const currentTime = Date.now() / 1000.0;
@@ -460,7 +463,6 @@ async function startUserRecording() {
                         }
                     }
                 }
-                ctx.restore();
             }
         });
         
