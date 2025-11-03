@@ -6,6 +6,8 @@ let userStream = null;
 let benchmarkCamera = null;
 let userCamera = null;
 let comparisonChart = null;
+let benchmarkRenderLoopId = null;
+let userRenderLoopId = null;
 
 // MediaPipe Pose
 let benchmarkPose = null;
