@@ -144,12 +144,23 @@ async function startBenchmarkRecording() {
         video.srcObject = stream;
         video.play(); // Ensure video plays even though it's hidden
         
-        // Wait for video to be ready
+        // Wait for video to be ready and playing
         await new Promise((resolve) => {
-            video.onloadedmetadata = () => {
-                video.play();
-                resolve();
+            const checkReady = () => {
+                if (video.readyState >= 2 && video.videoWidth > 0) {
+                    video.play().then(() => {
+                        console.log('Video playing');
+                        resolve();
+                    }).catch(err => {
+                        console.error('Video play error:', err);
+                        resolve(); // Continue anyway
+                    });
+                } else {
+                    setTimeout(checkReady, 100);
+                }
             };
+            video.onloadedmetadata = checkReady;
+            checkReady();
         });
         
         benchmarkPoseData = [];
@@ -167,29 +178,32 @@ async function startBenchmarkRecording() {
         
         // Store current pose landmarks for drawing
         let currentPoseLandmarks = null;
+        let renderLoopId = null;
         
-        // Separate rendering loop for continuous video display
+        // Separate rendering loop for continuous video display - runs at 60fps
         const renderLoop = () => {
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                ctx.save();
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                
-                // Draw pose overlay if available
-                if (currentPoseLandmarks) {
-                    drawConnections(ctx, currentPoseLandmarks, POSE_CONNECTIONS, {
-                        color: '#00FF00',
-                        lineWidth: 2
-                    });
-                    drawLandmarks(ctx, currentPoseLandmarks, {
-                        color: '#00FF00',
-                        lineWidth: 1,
-                        radius: 3
-                    });
+            try {
+                if (video.readyState >= 2 && !video.paused && video.videoWidth > 0) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    // Draw pose overlay if available
+                    if (currentPoseLandmarks) {
+                        drawConnections(ctx, currentPoseLandmarks, POSE_CONNECTIONS, {
+                            color: '#00FF00',
+                            lineWidth: 2
+                        });
+                        drawLandmarks(ctx, currentPoseLandmarks, {
+                            color: '#00FF00',
+                            lineWidth: 1,
+                            radius: 3
+                        });
+                    }
                 }
-                ctx.restore();
+            } catch (error) {
+                console.error('Render error:', error);
             }
-            requestAnimationFrame(renderLoop);
+            renderLoopId = requestAnimationFrame(renderLoop);
         };
         renderLoop();
         
@@ -294,6 +308,12 @@ async function startBenchmarkRecording() {
 }
 
 function stopBenchmarkRecording() {
+    // Stop render loop
+    if (typeof renderLoopId !== 'undefined' && renderLoopId !== null) {
+        cancelAnimationFrame(renderLoopId);
+        renderLoopId = null;
+    }
+    
     if (benchmarkCamera) {
         benchmarkCamera.stop();
         benchmarkCamera = null;
@@ -342,12 +362,23 @@ async function startUserRecording() {
         video.srcObject = stream;
         video.play(); // Ensure video plays even though it's hidden
         
-        // Wait for video to be ready
+        // Wait for video to be ready and playing
         await new Promise((resolve) => {
-            video.onloadedmetadata = () => {
-                video.play();
-                resolve();
+            const checkReady = () => {
+                if (video.readyState >= 2 && video.videoWidth > 0) {
+                    video.play().then(() => {
+                        console.log('Video playing');
+                        resolve();
+                    }).catch(err => {
+                        console.error('Video play error:', err);
+                        resolve(); // Continue anyway
+                    });
+                } else {
+                    setTimeout(checkReady, 100);
+                }
             };
+            video.onloadedmetadata = checkReady;
+            checkReady();
         });
         
         userPoseData = [];
@@ -365,29 +396,32 @@ async function startUserRecording() {
         
         // Store current pose landmarks for drawing
         let currentPoseLandmarks = null;
+        let renderLoopId = null;
         
-        // Separate rendering loop for continuous video display
+        // Separate rendering loop for continuous video display - runs at 60fps
         const renderLoop = () => {
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                ctx.save();
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                
-                // Draw pose overlay if available
-                if (currentPoseLandmarks) {
-                    drawConnections(ctx, currentPoseLandmarks, POSE_CONNECTIONS, {
-                        color: '#00FF00',
-                        lineWidth: 2
-                    });
-                    drawLandmarks(ctx, currentPoseLandmarks, {
-                        color: '#00FF00',
-                        lineWidth: 1,
-                        radius: 3
-                    });
+            try {
+                if (video.readyState >= 2 && !video.paused && video.videoWidth > 0) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    // Draw pose overlay if available
+                    if (currentPoseLandmarks) {
+                        drawConnections(ctx, currentPoseLandmarks, POSE_CONNECTIONS, {
+                            color: '#00FF00',
+                            lineWidth: 2
+                        });
+                        drawLandmarks(ctx, currentPoseLandmarks, {
+                            color: '#00FF00',
+                            lineWidth: 1,
+                            radius: 3
+                        });
+                    }
                 }
-                ctx.restore();
+            } catch (error) {
+                console.error('Render error:', error);
             }
-            requestAnimationFrame(renderLoop);
+            renderLoopId = requestAnimationFrame(renderLoop);
         };
         renderLoop();
         
@@ -488,6 +522,12 @@ async function startUserRecording() {
 }
 
 function stopUserRecording() {
+    // Stop render loop
+    if (typeof renderLoopId !== 'undefined' && renderLoopId !== null) {
+        cancelAnimationFrame(renderLoopId);
+        renderLoopId = null;
+    }
+    
     if (userCamera) {
         userCamera.stop();
         userCamera = null;
