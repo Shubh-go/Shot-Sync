@@ -131,12 +131,27 @@ async function startBenchmarkRecording() {
         canvas.width = 640;
         canvas.height = 480;
         
+        // Request camera access
         const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { width: 640, height: 480 } 
+            video: { 
+                width: { ideal: 640 }, 
+                height: { ideal: 480 },
+                facingMode: 'user'
+            } 
         });
         
         benchmarkStream = stream;
         video.srcObject = stream;
+        video.play(); // Ensure video plays even though it's hidden
+        
+        // Wait for video to be ready
+        await new Promise((resolve) => {
+            video.onloadedmetadata = () => {
+                video.play();
+                resolve();
+            };
+        });
+        
         benchmarkPoseData = [];
         
         let previousStage = "neutral";
@@ -153,7 +168,14 @@ async function startBenchmarkRecording() {
         benchmarkPose.onResults((results) => {
             ctx.save();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            
+            // Draw video frame
+            if (results.image) {
+                ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            } else {
+                // Fallback: draw from video element
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            }
             
             if (results.poseLandmarks) {
                 drawConnections(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
@@ -243,7 +265,9 @@ async function startBenchmarkRecording() {
         
         benchmarkCamera = new Camera(video, {
             onFrame: async () => {
-                await benchmarkPose.send({image: video});
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    await benchmarkPose.send({image: video});
+                }
             },
             width: 640,
             height: 480
@@ -293,12 +317,27 @@ async function startUserRecording() {
         canvas.width = 640;
         canvas.height = 480;
         
+        // Request camera access
         const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { width: 640, height: 480 } 
+            video: { 
+                width: { ideal: 640 }, 
+                height: { ideal: 480 },
+                facingMode: 'user'
+            } 
         });
         
         userStream = stream;
         video.srcObject = stream;
+        video.play(); // Ensure video plays even though it's hidden
+        
+        // Wait for video to be ready
+        await new Promise((resolve) => {
+            video.onloadedmetadata = () => {
+                video.play();
+                resolve();
+            };
+        });
+        
         userPoseData = [];
         
         let previousStage = "neutral";
@@ -315,7 +354,14 @@ async function startUserRecording() {
         userPose.onResults((results) => {
             ctx.save();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            
+            // Draw video frame
+            if (results.image) {
+                ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            } else {
+                // Fallback: draw from video element
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            }
             
             if (results.poseLandmarks) {
                 drawConnections(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
@@ -401,7 +447,9 @@ async function startUserRecording() {
         
         userCamera = new Camera(video, {
             onFrame: async () => {
-                await userPose.send({image: video});
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    await userPose.send({image: video});
+                }
             },
             width: 640,
             height: 480
