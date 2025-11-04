@@ -353,6 +353,8 @@ async function startBenchmarkRecording() {
 }
 
 function stopBenchmarkRecording() {
+    recordingActive = false;
+    
     // Stop render loop
     if (benchmarkRenderLoopId !== null) {
         cancelAnimationFrame(benchmarkRenderLoopId);
@@ -368,6 +370,15 @@ function stopBenchmarkRecording() {
         benchmarkStream.getTracks().forEach(track => track.stop());
         benchmarkStream = null;
     }
+    
+    // Clear the video element
+    const video = document.getElementById('benchmarkVideo');
+    if (video.srcObject) {
+        video.srcObject = null;
+    }
+    
+    // Clear landmarks
+    window.benchmarkCurrentLandmarks = null;
     
     document.getElementById('startBenchmark').disabled = false;
     document.getElementById('stopBenchmark').disabled = true;
@@ -1153,10 +1164,32 @@ function selectPlayer(player) {
 }
 
 function retakeBenchmark() {
+    // Stop any existing camera/streams
+    if (benchmarkCamera) {
+        benchmarkCamera.stop();
+        benchmarkCamera = null;
+    }
+    if (benchmarkStream) {
+        benchmarkStream.getTracks().forEach(track => track.stop());
+        benchmarkStream = null;
+    }
+    if (benchmarkRenderLoopId !== null) {
+        cancelAnimationFrame(benchmarkRenderLoopId);
+        benchmarkRenderLoopId = null;
+    }
+    
+    // Clear data and reset UI
     benchmarkPoseData = [];
     document.getElementById('retakeBenchmark').style.display = 'none';
     document.getElementById('benchmarkStatus').textContent = '';
     document.getElementById('benchmarkStatus').className = 'status';
+    document.getElementById('startBenchmark').disabled = false;
+    document.getElementById('stopBenchmark').disabled = true;
+    
+    // Clear canvas
+    const canvas = document.getElementById('benchmarkOutput');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
 function retakeUser() {
