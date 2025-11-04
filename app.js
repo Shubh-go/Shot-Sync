@@ -13,53 +13,75 @@ let proPlayerBenchmarks = {}; // Store pre-loaded benchmarks for pro players
 let benchmarkStopped = false; // Flag to prevent processing after stop
 
 // Generate realistic example benchmark data for professional players
+// Format must EXACTLY match what gets recorded in custom benchmark mode
 function generateExampleBenchmarkData() {
     // Create a realistic shooting motion with typical angles
+    // This mimics a real recording from startBenchmarkRecording
     const data = [];
     const duration = 2.0; // 2 seconds
-    const fps = 30; // 30 frames per second
+    const fps = 30; // 30 frames per second  
     const totalFrames = Math.floor(duration * fps);
+    
+    let previousStage = "neutral";
+    let recordingActive = false;
+    let seenFollowThrough = false;
+    let startTime = 0;
     
     for (let i = 0; i < totalFrames; i++) {
         const t = i / fps;
         const progress = t / duration; // 0 to 1
         
-        // Realistic shooting motion angles
+        // Realistic shooting motion states - match the state machine logic
         let state = "neutral";
-        if (progress < 0.2) {
+        if (progress < 0.15) {
+            state = "neutral";
+        } else if (progress < 0.85) {
             state = "pre_shot";
-        } else if (progress < 0.6) {
-            state = "pre_shot";
-        } else if (progress < 0.8) {
-            state = "pre_shot";
+            if (!recordingActive) {
+                recordingActive = true;
+                seenFollowThrough = false;
+                startTime = t;
+            }
         } else {
             state = "follow_through";
+            if (recordingActive) {
+                seenFollowThrough = true;
+            }
         }
         
         // Elbow angle: starts at ~90 degrees, extends to ~180 degrees
         const elbowAngle = 90 + (progress * 90) + (Math.sin(progress * Math.PI) * 10);
         
         // Wrist angle: starts at ~150 degrees, snaps to ~90 degrees at release
-        const wristAngle = 150 - (progress > 0.6 ? (progress - 0.6) * 150 : 0);
+        const wristAngle = progress < 0.6 ? 150 : (150 - (progress - 0.6) * 150);
         
         // Arm angle: relatively stable around 45-60 degrees
         const armAngle = 45 + (Math.sin(progress * Math.PI * 2) * 5);
         
-        // Create landmarks array (simplified - just store angles)
-        const landmarks = new Array(33).fill(null).map((_, idx) => ({
-            x: 0.5 + Math.sin(idx * 0.1) * 0.1,
-            y: 0.5 + Math.cos(idx * 0.1) * 0.1,
-            z: 0
-        }));
+        // Create landmarks array - EXACT format: array of [x, y, z] arrays (like get3DPoint returns)
+        const landmarks3D = [];
+        for (let idx = 0; idx < 33; idx++) {
+            // Create realistic landmark positions based on shooting motion
+            const x = 0.5 + Math.sin(idx * 0.2) * 0.1 + (progress * 0.05);
+            const y = 0.5 + Math.cos(idx * 0.2) * 0.1 - (progress * 0.1); // Arm moves up
+            const z = Math.sin(idx * 0.15) * 0.05;
+            landmarks3D.push([x, y, z]);
+        }
         
-        data.push({
-            state: state,
-            time: t,
-            elbow_angle: elbowAngle,
-            wrist_angle: wristAngle,
-            arm_angle: armAngle,
-            landmarks: landmarks
-        });
+        // Only record if recordingActive (matches the recording logic)
+        if (recordingActive) {
+            const elapsed = t - startTime;
+            data.push({
+                state: state,
+                time: elapsed,  // Use elapsed time like in recording
+                elbow_angle: elbowAngle,
+                wrist_angle: wristAngle,
+                arm_angle: armAngle,
+                landmarks: landmarks3D
+            });
+        }
+        
+        previousStage = state;
     }
     
     return data;
