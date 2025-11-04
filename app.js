@@ -8,6 +8,9 @@ let userCamera = null;
 let comparisonChart = null;
 let benchmarkRenderLoopId = null;
 let userRenderLoopId = null;
+let selectedPlayer = null; // 'curry', 'lebron', 'jordan', 'durant', 'clark', or 'custom'
+let proPlayerBenchmarks = {}; // Store pre-loaded benchmarks for pro players
+let benchmarkStopped = false; // Flag to prevent processing after stop
 
 // MediaPipe Pose
 let benchmarkPose = null;
