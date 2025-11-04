@@ -377,9 +377,29 @@ function stopBenchmarkRecording() {
         document.getElementById('benchmarkStatus').className = 'status success';
         document.getElementById('retakeBenchmark').style.display = 'inline-block';
         
+        // Store benchmark for pro players
+        if (selectedPlayer && selectedPlayer !== 'custom') {
+            proPlayerBenchmarks[selectedPlayer] = [...benchmarkPoseData];
+        }
+        
         // Move to step 2
         document.getElementById('step1').classList.remove('active');
         document.getElementById('step1').style.display = 'none';
+        
+        const playerNames = {
+            'curry': 'Stephen Curry',
+            'lebron': 'LeBron James',
+            'jordan': 'Michael Jordan',
+            'durant': 'Kevin Durant',
+            'clark': 'Caitlin Clark'
+        };
+        
+        if (selectedPlayer && selectedPlayer !== 'custom') {
+            document.getElementById('step2Title').textContent = `Step 2: Record Your Shot (vs ${playerNames[selectedPlayer]})`;
+        } else {
+            document.getElementById('step2Title').textContent = 'Step 2: Record Your Shot';
+        }
+        
         document.getElementById('step2').classList.add('active');
         document.getElementById('step2').style.display = 'block';
     }
@@ -590,14 +610,6 @@ function stopUserRecording() {
         document.getElementById('userStatus').textContent = `Recorded ${userPoseData.length} frames. Analyzing...`;
         document.getElementById('userStatus').className = 'status success';
         document.getElementById('retakeUser').style.display = 'inline-block';
-        
-        // For pro players, if no benchmark exists yet, use current user data as placeholder
-        if (selectedPlayer && selectedPlayer !== 'custom' && !proPlayerBenchmarks[selectedPlayer]) {
-            // Store current user data as placeholder benchmark
-            proPlayerBenchmarks[selectedPlayer] = [...userPoseData];
-            // For comparison, we'll use the same data (self-comparison for demo)
-            benchmarkPoseData = [...userPoseData];
-        }
         
         compareShots();
     }
@@ -1109,34 +1121,25 @@ function selectPlayer(player) {
         customExplanation.style.display = 'none';
     }
     
+    const playerNames = {
+        'curry': 'Stephen Curry',
+        'lebron': 'LeBron James',
+        'jordan': 'Michael Jordan',
+        'durant': 'Kevin Durant',
+        'clark': 'Caitlin Clark'
+    };
+    
     if (player === 'custom') {
         // Custom mode: show benchmark recording step
         document.getElementById('step1Title').textContent = 'Step 1: Record Benchmark Shot';
         document.getElementById('step1').classList.add('active');
         document.getElementById('step1').style.display = 'block';
     } else {
-        // Pro player mode: skip benchmark, go straight to user recording
-        // For now, use current user's benchmark as placeholder
-        // In production, you'd load pre-recorded benchmarks here
-        const playerNames = {
-            'curry': 'Stephen Curry',
-            'lebron': 'LeBron James',
-            'jordan': 'Michael Jordan',
-            'durant': 'Kevin Durant',
-            'clark': 'Caitlin Clark'
-        };
-        
-        document.getElementById('step2Title').textContent = `Record Your Shot (vs ${playerNames[player]})`;
-        document.getElementById('step2').classList.add('active');
-        document.getElementById('step2').style.display = 'block';
-        
-        // For now, we'll use a placeholder benchmark
-        // In production, load actual player benchmarks from server/localStorage
-        // For demo: prompt user to record benchmark first, then store it
-        if (!proPlayerBenchmarks[player]) {
-            // Show message that we'll use their benchmark
-            alert(`For now, we'll use your current shooting form as the ${playerNames[player]} benchmark. In a full version, this would be pre-loaded with professional player data.`);
-        }
+        // Pro player mode: record benchmark first (as placeholder for now)
+        // In production, this would be pre-loaded, but for now we record it
+        document.getElementById('step1Title').textContent = `Step 1: Record Benchmark (${playerNames[player]} form)`;
+        document.getElementById('step1').classList.add('active');
+        document.getElementById('step1').style.display = 'block';
     }
 }
 
