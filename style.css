@@ -275,37 +275,71 @@ canvas {
     background: white;
     border: 2px solid #e0e0e0;
     border-radius: 12px;
-    padding: 25px 15px;
+    padding: 30px 20px;
     cursor: pointer;
     transition: all 0.3s ease;
     text-align: center;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    min-height: 180px;
+    justify-content: center;
 }
 
 .player-btn:hover {
     border-color: #667eea;
     transform: translateY(-5px);
-    box-shadow: 0 5px 20px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.25);
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
 }
 
-.player-icon {
-    font-size: 2.5em;
-    margin-bottom: 5px;
+.player-btn:active {
+    transform: translateY(-2px);
+}
+
+.player-number {
+    font-size: 3em;
+    font-weight: 700;
+    color: #667eea;
+    margin-bottom: 8px;
+    line-height: 1;
+    font-family: 'Arial Black', sans-serif;
 }
 
 .player-name {
     font-weight: 600;
     color: #333;
-    font-size: 1em;
+    font-size: 1.1em;
+    margin-bottom: 4px;
+}
+
+.player-position {
+    font-size: 0.85em;
+    color: #888;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.player-icon-custom {
+    font-size: 3em;
+    font-weight: 300;
+    color: #667eea;
+    margin-bottom: 8px;
+    line-height: 1;
 }
 
 .player-description {
     font-size: 0.85em;
     color: #888;
     margin-top: 5px;
+    font-style: italic;
+}
+
+.custom-btn {
+    border-style: dashed;
+    border-width: 2px;
 }
 
 .custom-explanation {
@@ -358,8 +392,12 @@ canvas {
         padding: 20px 10px;
     }
     
-    .player-icon {
-        font-size: 2em;
+    .player-number {
+        font-size: 2.5em;
+    }
+    
+    .player-icon-custom {
+        font-size: 2.5em;
     }
 }
 

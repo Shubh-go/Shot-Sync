@@ -377,9 +377,10 @@ function stopBenchmarkRecording() {
         document.getElementById('benchmarkStatus').className = 'status success';
         document.getElementById('retakeBenchmark').style.display = 'inline-block';
         
-        // Store benchmark for pro players
+        // Store benchmark for pro players (deep copy to preserve data)
         if (selectedPlayer && selectedPlayer !== 'custom') {
-            proPlayerBenchmarks[selectedPlayer] = [...benchmarkPoseData];
+            proPlayerBenchmarks[selectedPlayer] = JSON.parse(JSON.stringify(benchmarkPoseData));
+            console.log(`Stored benchmark for ${selectedPlayer}:`, proPlayerBenchmarks[selectedPlayer].length, 'frames');
         }
         
         // Move to step 2
@@ -952,23 +953,31 @@ function compareShots() {
     document.getElementById('results').style.display = 'none';
     
     setTimeout(() => {
-        // For pro players, use stored benchmark or current benchmark
+        // For pro players, use stored benchmark; for custom, use current benchmark
         let benchmarkData = benchmarkPoseData;
-        let benchTimes = [];
-        let benchForm = { times: [], formVals: [] };
         
         if (selectedPlayer && selectedPlayer !== 'custom') {
             // Use stored benchmark for pro player
-            if (proPlayerBenchmarks[selectedPlayer]) {
+            if (proPlayerBenchmarks[selectedPlayer] && proPlayerBenchmarks[selectedPlayer].length > 0) {
                 benchmarkData = proPlayerBenchmarks[selectedPlayer];
             } else {
-                // Use current benchmark as placeholder (store it for this player)
+                // Fallback: use current benchmark if stored one doesn't exist
                 benchmarkData = benchmarkPoseData;
-                proPlayerBenchmarks[selectedPlayer] = [...benchmarkPoseData];
             }
         }
         
-        benchForm = extractFormSeries(benchmarkData);
+        // Check if we have valid benchmark data
+        if (!benchmarkData || benchmarkData.length === 0) {
+            document.getElementById('loading').innerHTML = '<p style="color: red;">No benchmark data found. Please record a benchmark first.</p>';
+            return;
+        }
+        
+        if (userPoseData.length === 0) {
+            document.getElementById('loading').innerHTML = '<p style="color: red;">No user shot data found. Please record your shot again.</p>';
+            return;
+        }
+        
+        const benchForm = extractFormSeries(benchmarkData);
         const userForm = extractFormSeries(userPoseData);
         
         if (benchForm.times.length < 2 || userForm.times.length < 2) {
@@ -1198,4 +1207,5 @@ function resetApp() {
         comparisonChart = null;
     }
 }
+
 
