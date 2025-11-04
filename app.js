@@ -50,13 +50,18 @@ function generateExampleBenchmarkData() {
         }
         
         // Elbow angle: starts at ~90 degrees, extends to ~180 degrees
-        const elbowAngle = 90 + (progress * 90) + (Math.sin(progress * Math.PI) * 10);
+        const elbowAngle = Math.max(0, Math.min(180, 90 + (progress * 90) + (Math.sin(progress * Math.PI) * 10)));
         
         // Wrist angle: starts at ~150 degrees, snaps to ~90 degrees at release
-        const wristAngle = progress < 0.6 ? 150 : (150 - (progress - 0.6) * 150);
+        const wristAngle = Math.max(0, Math.min(180, progress < 0.6 ? 150 : (150 - (progress - 0.6) * 150)));
         
         // Arm angle: relatively stable around 45-60 degrees
-        const armAngle = 45 + (Math.sin(progress * Math.PI * 2) * 5);
+        const armAngle = Math.max(0, Math.min(180, 45 + (Math.sin(progress * Math.PI * 2) * 5)));
+        
+        // Ensure all angles are valid numbers (not NaN)
+        if (isNaN(elbowAngle) || isNaN(wristAngle) || isNaN(armAngle)) {
+            continue; // Skip invalid frames
+        }
         
         // Create landmarks array - EXACT format: array of [x, y, z] arrays (like get3DPoint returns)
         const landmarks3D = [];
