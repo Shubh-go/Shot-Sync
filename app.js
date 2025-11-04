@@ -246,7 +246,6 @@ async function startBenchmarkRecording() {
         
         // Store current pose landmarks for drawing
         let currentPoseLandmarks = null;
-        let renderLoopId = null;
         
         // Separate rendering loop for continuous video display - runs at 60fps
         const renderLoop = () => {
@@ -271,7 +270,7 @@ async function startBenchmarkRecording() {
             } catch (error) {
                 console.error('Render error:', error);
             }
-            renderLoopId = requestAnimationFrame(renderLoop);
+            benchmarkRenderLoopId = requestAnimationFrame(renderLoop);
         };
         renderLoop();
         
