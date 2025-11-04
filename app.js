@@ -353,6 +353,7 @@ async function startBenchmarkRecording() {
 }
 
 function stopBenchmarkRecording() {
+    // Stop recording state first
     recordingActive = false;
     
     // Stop render loop
@@ -361,19 +362,27 @@ function stopBenchmarkRecording() {
         benchmarkRenderLoopId = null;
     }
     
+    // Stop MediaPipe camera
     if (benchmarkCamera) {
-        benchmarkCamera.stop();
+        try {
+            benchmarkCamera.stop();
+        } catch (e) {
+            console.error('Error stopping camera:', e);
+        }
         benchmarkCamera = null;
     }
     
+    // Stop video stream
     if (benchmarkStream) {
-        benchmarkStream.getTracks().forEach(track => track.stop());
+        benchmarkStream.getTracks().forEach(track => {
+            track.stop();
+        });
         benchmarkStream = null;
     }
     
     // Clear the video element
     const video = document.getElementById('benchmarkVideo');
-    if (video.srcObject) {
+    if (video && video.srcObject) {
         video.srcObject = null;
     }
     
