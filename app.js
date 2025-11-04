@@ -232,6 +232,7 @@ async function startBenchmarkRecording() {
         });
         
         benchmarkPoseData = [];
+        benchmarkStopped = false; // Reset stop flag
         
         let previousStage = "neutral";
         let startTime = null;
@@ -249,13 +250,18 @@ async function startBenchmarkRecording() {
         
         // Separate rendering loop for continuous video display - runs at 60fps
         const renderLoop = () => {
+            // Don't render if stopped
+            if (benchmarkStopped) {
+                return;
+            }
+            
             try {
                 if (video.readyState >= 2 && !video.paused && video.videoWidth > 0) {
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     
                     // Draw pose overlay if available
-                    if (currentPoseLandmarks) {
+                    if (currentPoseLandmarks && !benchmarkStopped) {
                         drawConnections(ctx, currentPoseLandmarks, POSE_CONNECTIONS, {
                             color: '#00FF00',
                             lineWidth: 2
@@ -270,15 +276,23 @@ async function startBenchmarkRecording() {
             } catch (error) {
                 console.error('Render error:', error);
             }
-            benchmarkRenderLoopId = requestAnimationFrame(renderLoop);
+            
+            if (!benchmarkStopped) {
+                benchmarkRenderLoopId = requestAnimationFrame(renderLoop);
+            }
         };
         renderLoop();
         
         benchmarkPose.onResults((results) => {
+            // Don't process if stopped
+            if (benchmarkStopped) {
+                return;
+            }
+            
             // Store landmarks for rendering
             currentPoseLandmarks = results.poseLandmarks;
             
-            if (results.poseLandmarks) {
+            if (results.poseLandmarks && !benchmarkStopped) {
                 
                 const state = getArmState(results.poseLandmarks, canvas.width, canvas.height);
                 const currentTime = Date.now() / 1000.0;
@@ -326,7 +340,10 @@ async function startBenchmarkRecording() {
                             arm_angle: armAngle,
                             landmarks: landmarks3D
                         });
-                        stopBenchmarkRecording();
+                        // Use setTimeout to stop asynchronously to avoid blocking
+                        setTimeout(() => {
+                            stopBenchmarkRecording();
+                        }, 100);
                         return;
                     }
                     previousStage = state;
@@ -375,7 +392,8 @@ async function startBenchmarkRecording() {
 }
 
 function stopBenchmarkRecording() {
-    // Stop recording state first
+    // Set stop flag first to prevent further processing
+    benchmarkStopped = true;
     recordingActive = false;
     
     // Stop render loop
@@ -406,6 +424,13 @@ function stopBenchmarkRecording() {
     const video = document.getElementById('benchmarkVideo');
     if (video && video.srcObject) {
         video.srcObject = null;
+    }
+    
+    // Clear canvas
+    const canvas = document.getElementById('benchmarkOutput');
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
     
     // Clear landmarks
@@ -1195,9 +1220,16 @@ function selectPlayer(player) {
 }
 
 function retakeBenchmark() {
+    // Set stop flag
+    benchmarkStopped = true;
+    
     // Stop any existing camera/streams
     if (benchmarkCamera) {
-        benchmarkCamera.stop();
+        try {
+            benchmarkCamera.stop();
+        } catch (e) {
+            console.error('Error stopping camera:', e);
+        }
         benchmarkCamera = null;
     }
     if (benchmarkStream) {
@@ -1219,8 +1251,16 @@ function retakeBenchmark() {
     
     // Clear canvas
     const canvas = document.getElementById('benchmarkOutput');
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    
+    // Clear video
+    const video = document.getElementById('benchmarkVideo');
+    if (video && video.srcObject) {
+        video.srcObject = null;
+    }
 }
 
 function retakeUser() {
