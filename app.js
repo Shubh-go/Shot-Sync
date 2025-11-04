@@ -169,12 +169,35 @@ function getArmState(landmarks, width, height) {
 
 async function startBenchmarkRecording() {
     try {
+        // Clean up any existing streams/cameras first
+        if (benchmarkCamera) {
+            try {
+                benchmarkCamera.stop();
+            } catch (e) {
+                console.error('Error stopping existing camera:', e);
+            }
+            benchmarkCamera = null;
+        }
+        if (benchmarkStream) {
+            benchmarkStream.getTracks().forEach(track => track.stop());
+            benchmarkStream = null;
+        }
+        if (benchmarkRenderLoopId !== null) {
+            cancelAnimationFrame(benchmarkRenderLoopId);
+            benchmarkRenderLoopId = null;
+        }
+        
         const video = document.getElementById('benchmarkVideo');
         const canvas = document.getElementById('benchmarkOutput');
         const ctx = canvas.getContext('2d');
         
         canvas.width = 640;
         canvas.height = 480;
+        
+        // Clear video source if exists
+        if (video.srcObject) {
+            video.srcObject = null;
+        }
         
         // Request camera access
         const stream = await navigator.mediaDevices.getUserMedia({ 
