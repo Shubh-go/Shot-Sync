@@ -12,6 +12,67 @@ let selectedPlayer = null; // 'curry', 'lebron', 'jordan', 'durant', 'clark', or
 let proPlayerBenchmarks = {}; // Store pre-loaded benchmarks for pro players
 let benchmarkStopped = false; // Flag to prevent processing after stop
 
+// Generate realistic example benchmark data for professional players
+function generateExampleBenchmarkData() {
+    // Create a realistic shooting motion with typical angles
+    const data = [];
+    const duration = 2.0; // 2 seconds
+    const fps = 30; // 30 frames per second
+    const totalFrames = Math.floor(duration * fps);
+    
+    for (let i = 0; i < totalFrames; i++) {
+        const t = i / fps;
+        const progress = t / duration; // 0 to 1
+        
+        // Realistic shooting motion angles
+        let state = "neutral";
+        if (progress < 0.2) {
+            state = "pre_shot";
+        } else if (progress < 0.6) {
+            state = "pre_shot";
+        } else if (progress < 0.8) {
+            state = "pre_shot";
+        } else {
+            state = "follow_through";
+        }
+        
+        // Elbow angle: starts at ~90 degrees, extends to ~180 degrees
+        const elbowAngle = 90 + (progress * 90) + (Math.sin(progress * Math.PI) * 10);
+        
+        // Wrist angle: starts at ~150 degrees, snaps to ~90 degrees at release
+        const wristAngle = 150 - (progress > 0.6 ? (progress - 0.6) * 150 : 0);
+        
+        // Arm angle: relatively stable around 45-60 degrees
+        const armAngle = 45 + (Math.sin(progress * Math.PI * 2) * 5);
+        
+        // Create landmarks array (simplified - just store angles)
+        const landmarks = new Array(33).fill(null).map((_, idx) => ({
+            x: 0.5 + Math.sin(idx * 0.1) * 0.1,
+            y: 0.5 + Math.cos(idx * 0.1) * 0.1,
+            z: 0
+        }));
+        
+        data.push({
+            state: state,
+            time: t,
+            elbow_angle: elbowAngle,
+            wrist_angle: wristAngle,
+            arm_angle: armAngle,
+            landmarks: landmarks
+        });
+    }
+    
+    return data;
+}
+
+// Initialize professional player benchmarks with example data
+function initializeProPlayerBenchmarks() {
+    const players = ['curry', 'lebron', 'jordan', 'durant', 'clark'];
+    players.forEach(player => {
+        proPlayerBenchmarks[player] = generateExampleBenchmarkData();
+    });
+}
+
 // MediaPipe Pose
 let benchmarkPose = null;
 let userPose = null;
@@ -379,30 +440,11 @@ function stopBenchmarkRecording() {
         document.getElementById('benchmarkStatus').className = 'status success';
         document.getElementById('retakeBenchmark').style.display = 'inline-block';
         
-        // Store benchmark for pro players (deep copy to preserve data)
-        if (selectedPlayer && selectedPlayer !== 'custom') {
-            proPlayerBenchmarks[selectedPlayer] = JSON.parse(JSON.stringify(benchmarkPoseData));
-            console.log(`Stored benchmark for ${selectedPlayer}:`, proPlayerBenchmarks[selectedPlayer].length, 'frames');
-        }
-        
-        // Move to step 2
+        // Move to step 2 (only for custom mode)
         document.getElementById('step1').classList.remove('active');
         document.getElementById('step1').style.display = 'none';
         
-        const playerNames = {
-            'curry': 'Stephen Curry',
-            'lebron': 'LeBron James',
-            'jordan': 'Michael Jordan',
-            'durant': 'Kevin Durant',
-            'clark': 'Caitlin Clark'
-        };
-        
-        if (selectedPlayer && selectedPlayer !== 'custom') {
-            document.getElementById('step2Title').textContent = `Step 2: Record Your Shot (vs ${playerNames[selectedPlayer]})`;
-        } else {
-            document.getElementById('step2Title').textContent = 'Step 2: Record Your Shot';
-        }
-        
+        document.getElementById('step2Title').textContent = 'Step 2: Record Your Shot';
         document.getElementById('step2').classList.add('active');
         document.getElementById('step2').style.display = 'block';
     }
@@ -955,16 +997,17 @@ function compareShots() {
     document.getElementById('results').style.display = 'none';
     
     setTimeout(() => {
-        // For pro players, use stored benchmark; for custom, use current benchmark
+        // For pro players, use pre-loaded benchmark; for custom, use recorded benchmark
         let benchmarkData = benchmarkPoseData;
         
         if (selectedPlayer && selectedPlayer !== 'custom') {
-            // Use stored benchmark for pro player
+            // Use pre-loaded benchmark for pro player
             if (proPlayerBenchmarks[selectedPlayer] && proPlayerBenchmarks[selectedPlayer].length > 0) {
                 benchmarkData = proPlayerBenchmarks[selectedPlayer];
             } else {
-                // Fallback: use current benchmark if stored one doesn't exist
-                benchmarkData = benchmarkPoseData;
+                // Initialize if needed
+                initializeProPlayerBenchmarks();
+                benchmarkData = proPlayerBenchmarks[selectedPlayer];
             }
         }
         
@@ -1098,6 +1141,9 @@ function displayResults(data) {
 document.addEventListener('DOMContentLoaded', () => {
     initializePose();
     
+    // Initialize professional player benchmarks with example data
+    initializeProPlayerBenchmarks();
+    
     // Player selection buttons
     document.querySelectorAll('.player-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -1146,11 +1192,16 @@ function selectPlayer(player) {
         document.getElementById('step1').classList.add('active');
         document.getElementById('step1').style.display = 'block';
     } else {
-        // Pro player mode: record benchmark first (as placeholder for now)
-        // In production, this would be pre-loaded, but for now we record it
-        document.getElementById('step1Title').textContent = `Step 1: Record Benchmark (${playerNames[player]} form)`;
-        document.getElementById('step1').classList.add('active');
-        document.getElementById('step1').style.display = 'block';
+        // Pro player mode: skip to user recording with pre-loaded benchmark
+        // Use the pre-loaded benchmark data
+        if (!proPlayerBenchmarks[player] || proPlayerBenchmarks[player].length === 0) {
+            // Initialize if not already done
+            initializeProPlayerBenchmarks();
+        }
+        
+        document.getElementById('step2Title').textContent = `Record Your Shot (vs ${playerNames[player]})`;
+        document.getElementById('step2').classList.add('active');
+        document.getElementById('step2').style.display = 'block';
     }
 }
 
