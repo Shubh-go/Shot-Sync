@@ -756,46 +756,47 @@ function generateFeedback(benchmarkData, userData, benchTimes, userTimes, userCl
                 ? Math.abs(userAngles.arm - benchAngles.arm) : 0;
             
             // Basketball-specific actionable feedback
+            // Lower thresholds to catch more issues
             if (eventNames[i] === "Follow Through") {
                 // Wrist snap analysis
-                if (userAngles.wrist !== null && benchAngles.wrist !== null && wristDiff > 10) {
-                    if (userAngles.wrist > benchAngles.wrist + 5) {
+                if (userAngles.wrist !== null && benchAngles.wrist !== null && wristDiff > 5) {
+                    if (userAngles.wrist > benchAngles.wrist + 3) {
                         eventIssues.push(`💪 ${eventNames[i]}: Your wrist isn't snapping hard enough. Actively snap your wrist forward at release for better follow-through and shot power.`);
-                    } else if (userAngles.wrist < benchAngles.wrist - 5) {
+                    } else if (userAngles.wrist < benchAngles.wrist - 3) {
                         eventIssues.push(`💪 ${eventNames[i]}: Your wrist is over-extending. Focus on a controlled snap - not too hard, not too soft.`);
                     }
                 }
                 
                 // Elbow extension
-                if (elbowDiff > 10) {
-                    if (userAngles.elbow > benchAngles.elbow + 5) {
+                if (elbowDiff > 5) {
+                    if (userAngles.elbow > benchAngles.elbow + 3) {
                         eventIssues.push(`💪 ${eventNames[i]}: Keep your arm fully extended after release. Don't let your elbow collapse - maintain full extension for better arc.`);
-                    } else if (userAngles.elbow < benchAngles.elbow - 5) {
+                    } else if (userAngles.elbow < benchAngles.elbow - 3) {
                         eventIssues.push(`💪 ${eventNames[i]}: Your arm is too straight. Maintain a slight natural bend even at full extension.`);
                     }
                 }
             } else if (eventNames[i] === "Release") {
                 // Wrist position at release
-                if (userAngles.wrist !== null && benchAngles.wrist !== null && wristDiff > 10) {
-                    if (userAngles.wrist > benchAngles.wrist + 5) {
+                if (userAngles.wrist !== null && benchAngles.wrist !== null && wristDiff > 5) {
+                    if (userAngles.wrist > benchAngles.wrist + 3) {
                         eventIssues.push(`🎯 ${eventNames[i]}: Your wrist is too bent at release. Snap your wrist forward more aggressively - this creates the backspin for better accuracy.`);
-                    } else if (userAngles.wrist < benchAngles.wrist - 5) {
+                    } else if (userAngles.wrist < benchAngles.wrist - 3) {
                         eventIssues.push(`🎯 ${eventNames[i]}: Release with your wrist in a more bent position, then snap forward. This creates the proper shooting motion.`);
                     }
                 }
                 
                 // Elbow position at release
-                if (elbowDiff > 15) {
-                    if (userAngles.elbow > benchAngles.elbow + 10) {
+                if (elbowDiff > 8) {
+                    if (userAngles.elbow > benchAngles.elbow + 5) {
                         eventIssues.push(`🎯 ${eventNames[i]}: Your elbow is too wide (chicken wing). Keep your elbow closer to your body and aligned with the rim.`);
-                    } else if (userAngles.elbow < benchAngles.elbow - 10) {
+                    } else if (userAngles.elbow < benchAngles.elbow - 5) {
                         eventIssues.push(`🎯 ${eventNames[i]}: Your elbow is too tucked in. Find the balance - not too wide, not too tight.`);
                     }
                 }
             } else if (eventNames[i] === "Ball Set") {
                 // Shooting pocket position
-                if (elbowDiff > 15) {
-                    if (userAngles.elbow > benchAngles.elbow + 10) {
+                if (elbowDiff > 8) {
+                    if (userAngles.elbow > benchAngles.elbow + 5) {
                         eventIssues.push(`🏀 ${eventNames[i]}: Your elbow is flaring out. Keep your shooting arm aligned - elbow should point toward the rim, not outward.`);
                     } else {
                         eventIssues.push(`🏀 ${eventNames[i]}: Tuck your elbow in slightly more. Your shooting arm should form a smooth L-shape.`);
@@ -803,13 +804,13 @@ function generateFeedback(benchmarkData, userData, benchTimes, userTimes, userCl
                 }
                 
                 // Wrist preparation
-                if (userAngles.wrist !== null && benchAngles.wrist !== null && wristDiff > 15) {
+                if (userAngles.wrist !== null && benchAngles.wrist !== null && wristDiff > 8) {
                     eventIssues.push(`🏀 ${eventNames[i]}: Prepare your wrist for the shot. Your wrist should be cocked back and ready to snap forward.`);
                 }
             } else if (eventNames[i] === "Start") {
                 // Initial setup
-                if (elbowDiff > 15) {
-                    if (userAngles.elbow > benchAngles.elbow + 10) {
+                if (elbowDiff > 8) {
+                    if (userAngles.elbow > benchAngles.elbow + 5) {
                         eventIssues.push(`🏀 ${eventNames[i]}: Start with your elbow closer to your body. Your shooting arm should be relaxed but ready.`);
                     } else {
                         eventIssues.push(`🏀 ${eventNames[i]}: Start with your elbow slightly more bent. Prepare your shooting pocket early.`);
@@ -817,14 +818,23 @@ function generateFeedback(benchmarkData, userData, benchTimes, userTimes, userCl
                 }
                 
                 // Overall form check
-                if (armDiff > 15 && userAngles.arm !== null) {
+                if (armDiff > 8 && userAngles.arm !== null) {
                     eventIssues.push(`🏀 ${eventNames[i]}: Check your shooting stance. Your shooting arm should be aligned with your target from the start.`);
                 }
             }
         }
     }
     
-    feedback.push(...eventIssues.slice(0, 5)); // Show top 5 issues
+    // Always show feedback, even if no specific issues (general tips)
+    if (eventIssues.length > 0) {
+        feedback.push(...eventIssues.slice(0, 6)); // Show top 6 issues
+    } else {
+        // If no specific issues found, provide general tips
+        if (avgCloseness < 90 && avgCloseness >= 75) {
+            feedback.push("💡 TIP: Focus on maintaining consistent elbow position throughout your shot.");
+            feedback.push("💡 TIP: Practice snapping your wrist forward at release for better backspin.");
+        }
+    }
     
     // 4. Identify worst phase
     if (userCloseness.length > 0) {
@@ -857,7 +867,7 @@ function generateFeedback(benchmarkData, userData, benchTimes, userTimes, userCl
         }
     }
     
-    // 6. Wrist snap consistency
+    // 6. Wrist snap consistency (always check this)
     const releaseAngles = getEventAngles(userData, userTimes, 2);
     const followThroughAngles = getEventAngles(userData, userTimes, 3);
     const benchReleaseAngles = getEventAngles(benchmarkData, benchTimes, 2);
@@ -869,11 +879,20 @@ function generateFeedback(benchmarkData, userData, benchTimes, userTimes, userCl
         const benchWristSnap = benchReleaseAngles.wrist - benchFollowThroughAngles.wrist;
         const snapDiff = userWristSnap - benchWristSnap;
         
-        if (snapDiff < -5) {
+        if (snapDiff < -3) {
             feedback.push("💪 WRIST SNAP: You're not snapping your wrist aggressively enough. The snap creates backspin - practice the 'gooseneck' follow-through.");
-        } else if (snapDiff > 10) {
+        } else if (snapDiff > 8) {
             feedback.push("💪 WRIST SNAP: Your wrist snap is too aggressive. Aim for a controlled, smooth snap, not a violent motion.");
+        } else if (Math.abs(snapDiff) > 2) {
+            // Even if close, provide general wrist snap tip
+            feedback.push("💪 WRIST SNAP: Focus on snapping your wrist forward at release. This creates backspin for better shot accuracy.");
         }
+    }
+    
+    // 7. General tips if no specific issues found
+    if (eventIssues.length === 0 && avgCloseness < 95) {
+        feedback.push("💡 TIP: Keep your shooting elbow aligned with the rim throughout your shot.");
+        feedback.push("💡 TIP: Practice maintaining consistent form from start to follow-through.");
     }
     
     // 7. Positive reinforcement
