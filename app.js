@@ -172,35 +172,12 @@ function getArmState(landmarks, width, height) {
 
 async function startBenchmarkRecording() {
     try {
-        // Clean up any existing streams/cameras first
-        if (benchmarkCamera) {
-            try {
-                benchmarkCamera.stop();
-            } catch (e) {
-                console.error('Error stopping existing camera:', e);
-            }
-            benchmarkCamera = null;
-        }
-        if (benchmarkStream) {
-            benchmarkStream.getTracks().forEach(track => track.stop());
-            benchmarkStream = null;
-        }
-        if (benchmarkRenderLoopId !== null) {
-            cancelAnimationFrame(benchmarkRenderLoopId);
-            benchmarkRenderLoopId = null;
-        }
-        
         const video = document.getElementById('benchmarkVideo');
         const canvas = document.getElementById('benchmarkOutput');
         const ctx = canvas.getContext('2d');
         
         canvas.width = 640;
         canvas.height = 480;
-        
-        // Clear video source if exists
-        if (video.srcObject) {
-            video.srcObject = null;
-        }
         
         // Request camera access
         const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -235,34 +212,24 @@ async function startBenchmarkRecording() {
         });
         
         benchmarkPoseData = [];
-        benchmarkStopped = false; // Reset stop flag
         
+        let previousStage = "neutral";
         let startTime = null;
         let recordingActive = false;
-        
-        // Start recording immediately
-        recordingActive = true;
-        startTime = Date.now() / 1000.0;
+        let seenFollowThrough = false;
+        const lastPrintTime = { value: Date.now() };
         
         document.getElementById('startBenchmark').disabled = true;
         document.getElementById('stopBenchmark').disabled = false;
-        document.getElementById('benchmarkStatus').textContent = 'Recording... Click "Stop Recording" when finished.';
+        document.getElementById('benchmarkStatus').textContent = 'Recording...';
         document.getElementById('benchmarkStatus').className = 'status recording';
         
         // Store current pose landmarks for drawing
         let currentPoseLandmarks = null;
+        let renderLoopId = null;
         
         // Separate rendering loop for continuous video display - runs at 60fps
         const renderLoop = () => {
-            // Don't render if stopped
-            if (benchmarkStopped || !recordingActive) {
-                // Clear canvas when stopped
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = '#000000';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                return;
-            }
-            
             try {
                 if (video.readyState >= 2 && !video.paused && video.videoWidth > 0) {
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -284,20 +251,14 @@ async function startBenchmarkRecording() {
             } catch (error) {
                 console.error('Render error:', error);
             }
-            
-            if (!benchmarkStopped && recordingActive) {
-                benchmarkRenderLoopId = requestAnimationFrame(renderLoop);
-            }
+            renderLoopId = requestAnimationFrame(renderLoop);
         };
         renderLoop();
         
+        // Store renderLoopId in global for cleanup
+        benchmarkRenderLoopId = renderLoopId;
+        
         benchmarkPose.onResults((results) => {
-            // Don't process if stopped - check this FIRST
-            if (benchmarkStopped || !recordingActive) {
-                currentPoseLandmarks = null;
-                return;
-            }
-            
             // Store landmarks for rendering
             currentPoseLandmarks = results.poseLandmarks;
             
@@ -306,7 +267,6 @@ async function startBenchmarkRecording() {
                 const state = getArmState(results.poseLandmarks, canvas.width, canvas.height);
                 const currentTime = Date.now() / 1000.0;
                 
-                // Compute angles
                 const rightShoulder = get3DPoint(results.poseLandmarks, 12, canvas.width, canvas.height);
                 const rightElbow = get3DPoint(results.poseLandmarks, 14, canvas.width, canvas.height);
                 const rightWrist = get3DPoint(results.poseLandmarks, 16, canvas.width, canvas.height);
@@ -317,15 +277,42 @@ async function startBenchmarkRecording() {
                 const wristAngle = calculateAngle(rightElbow, rightWrist, rightIndex);
                 const armAngle = calculateAngle(leftShoulder, rightShoulder, rightElbow);
                 
-                // Store landmarks
                 const landmarks3D = [];
                 for (let i = 0; i < 33; i++) {
                     const pt = get3DPoint(results.poseLandmarks, i, canvas.width, canvas.height);
                     landmarks3D.push(pt || [NaN, NaN, NaN]);
                 }
                 
-                // Simple recording - just record all frames when recording is active
-                // User manually stops via button
+                if (state !== previousStage) {
+                    if (state === "pre_shot" && !recordingActive) {
+                        recordingActive = true;
+                        seenFollowThrough = false;
+                        startTime = currentTime;
+                        benchmarkPoseData = [];
+                        lastPrintTime.value = currentTime;
+                    } else if (state === "neutral" && recordingActive && !seenFollowThrough) {
+                        recordingActive = false;
+                        seenFollowThrough = false;
+                        startTime = null;
+                        benchmarkPoseData = [];
+                    } else if (state === "follow_through" && recordingActive) {
+                        seenFollowThrough = true;
+                    } else if (state === "pre_shot" && recordingActive && seenFollowThrough) {
+                        const elapsed = currentTime - startTime;
+                        benchmarkPoseData.push({
+                            state: state,
+                            time: elapsed,
+                            elbow_angle: elbowAngle,
+                            wrist_angle: wristAngle,
+                            arm_angle: armAngle,
+                            landmarks: landmarks3D
+                        });
+                        stopBenchmarkRecording();
+                        return;
+                    }
+                    previousStage = state;
+                }
+                
                 if (recordingActive) {
                     const elapsed = currentTime - startTime;
                     benchmarkPoseData.push({
@@ -336,6 +323,12 @@ async function startBenchmarkRecording() {
                         arm_angle: armAngle,
                         landmarks: landmarks3D
                     });
+                    
+                    if (state === "pre_shot" || state === "follow_through") {
+                        if (currentTime - lastPrintTime.value >= 0.1) {
+                            lastPrintTime.value = currentTime;
+                        }
+                    }
                 }
             }
         });
@@ -362,91 +355,57 @@ async function startBenchmarkRecording() {
 }
 
 function stopBenchmarkRecording() {
-    // Stop recording first
-    recordingActive = false;
-    benchmarkStopped = true;
-    
     // Stop render loop
     if (benchmarkRenderLoopId !== null) {
         cancelAnimationFrame(benchmarkRenderLoopId);
         benchmarkRenderLoopId = null;
     }
     
-    // Stop MediaPipe camera FIRST
     if (benchmarkCamera) {
-        try {
-            benchmarkCamera.stop();
-        } catch (e) {
-            console.error('Error stopping camera:', e);
-        }
+        benchmarkCamera.stop();
         benchmarkCamera = null;
     }
     
-    // Stop video stream
     if (benchmarkStream) {
-        benchmarkStream.getTracks().forEach(track => {
-            track.stop();
-        });
+        benchmarkStream.getTracks().forEach(track => track.stop());
         benchmarkStream = null;
     }
-    
-    // Clear the video element
-    const video = document.getElementById('benchmarkVideo');
-    if (video && video.srcObject) {
-        video.srcObject = null;
-    }
-    
-    // Clear canvas
-    const canvas = document.getElementById('benchmarkOutput');
-    if (canvas) {
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        // Draw a black frame to ensure nothing is stuck
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-    
-    // Clear landmarks
-    window.benchmarkCurrentLandmarks = null;
     
     document.getElementById('startBenchmark').disabled = false;
     document.getElementById('stopBenchmark').disabled = true;
     
-    // Wait a bit for everything to fully stop before navigating
-    setTimeout(() => {
-        if (benchmarkPoseData.length > 0) {
-            document.getElementById('benchmarkStatus').textContent = `Recorded ${benchmarkPoseData.length} frames.`;
-            document.getElementById('benchmarkStatus').className = 'status success';
-            document.getElementById('retakeBenchmark').style.display = 'inline-block';
-            
-            // Store benchmark for pro players (deep copy to preserve data)
-            if (selectedPlayer && selectedPlayer !== 'custom') {
-                proPlayerBenchmarks[selectedPlayer] = JSON.parse(JSON.stringify(benchmarkPoseData));
-                console.log(`Stored benchmark for ${selectedPlayer}:`, proPlayerBenchmarks[selectedPlayer].length, 'frames');
-            }
-            
-            // Move to step 2
-            document.getElementById('step1').classList.remove('active');
-            document.getElementById('step1').style.display = 'none';
-            
-            const playerNames = {
-                'curry': 'Stephen Curry',
-                'lebron': 'LeBron James',
-                'jordan': 'Michael Jordan',
-                'durant': 'Kevin Durant',
-                'clark': 'Caitlin Clark'
-            };
-            
-            if (selectedPlayer && selectedPlayer !== 'custom') {
-                document.getElementById('step2Title').textContent = `Step 2: Record Your Shot (vs ${playerNames[selectedPlayer]})`;
-            } else {
-                document.getElementById('step2Title').textContent = 'Step 2: Record Your Shot';
-            }
-            
-            document.getElementById('step2').classList.add('active');
-            document.getElementById('step2').style.display = 'block';
+    if (benchmarkPoseData.length > 0) {
+        document.getElementById('benchmarkStatus').textContent = `Recorded ${benchmarkPoseData.length} frames.`;
+        document.getElementById('benchmarkStatus').className = 'status success';
+        document.getElementById('retakeBenchmark').style.display = 'inline-block';
+        
+        // Store benchmark for pro players (deep copy to preserve data)
+        if (selectedPlayer && selectedPlayer !== 'custom') {
+            proPlayerBenchmarks[selectedPlayer] = JSON.parse(JSON.stringify(benchmarkPoseData));
+            console.log(`Stored benchmark for ${selectedPlayer}:`, proPlayerBenchmarks[selectedPlayer].length, 'frames');
         }
-    }, 300);
+        
+        // Move to step 2
+        document.getElementById('step1').classList.remove('active');
+        document.getElementById('step1').style.display = 'none';
+        
+        const playerNames = {
+            'curry': 'Stephen Curry',
+            'lebron': 'LeBron James',
+            'jordan': 'Michael Jordan',
+            'durant': 'Kevin Durant',
+            'clark': 'Caitlin Clark'
+        };
+        
+        if (selectedPlayer && selectedPlayer !== 'custom') {
+            document.getElementById('step2Title').textContent = `Step 2: Record Your Shot (vs ${playerNames[selectedPlayer]})`;
+        } else {
+            document.getElementById('step2Title').textContent = 'Step 2: Record Your Shot';
+        }
+        
+        document.getElementById('step2').classList.add('active');
+        document.getElementById('step2').style.display = 'block';
+    }
 }
 
 async function startUserRecording() {
