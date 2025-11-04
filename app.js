@@ -237,15 +237,16 @@ async function startBenchmarkRecording() {
         benchmarkPoseData = [];
         benchmarkStopped = false; // Reset stop flag
         
-        let previousStage = "neutral";
         let startTime = null;
         let recordingActive = false;
-        let seenFollowThrough = false;
-        const lastPrintTime = { value: Date.now() };
+        
+        // Start recording immediately
+        recordingActive = true;
+        startTime = Date.now() / 1000.0;
         
         document.getElementById('startBenchmark').disabled = true;
         document.getElementById('stopBenchmark').disabled = false;
-        document.getElementById('benchmarkStatus').textContent = 'Recording...';
+        document.getElementById('benchmarkStatus').textContent = 'Recording... Click "Stop Recording" when finished.';
         document.getElementById('benchmarkStatus').className = 'status recording';
         
         // Store current pose landmarks for drawing
@@ -318,41 +319,8 @@ async function startBenchmarkRecording() {
                     landmarks3D.push(pt || [NaN, NaN, NaN]);
                 }
                 
-                // Stage transitions
-                if (state !== previousStage) {
-                    if (state === "pre_shot" && !recordingActive) {
-                        recordingActive = true;
-                        seenFollowThrough = false;
-                        startTime = currentTime;
-                        benchmarkPoseData = [];
-                        lastPrintTime.value = currentTime;
-                    } else if (state === "neutral" && recordingActive && !seenFollowThrough) {
-                        recordingActive = false;
-                        seenFollowThrough = false;
-                        startTime = null;
-                        benchmarkPoseData = [];
-                    } else if (state === "follow_through" && recordingActive) {
-                        seenFollowThrough = true;
-                    } else if (state === "pre_shot" && recordingActive && seenFollowThrough) {
-                        const elapsed = currentTime - startTime;
-                        benchmarkPoseData.push({
-                            state: state,
-                            time: elapsed,
-                            elbow_angle: elbowAngle,
-                            wrist_angle: wristAngle,
-                            arm_angle: armAngle,
-                            landmarks: landmarks3D
-                        });
-                        // Use setTimeout to stop asynchronously to avoid blocking
-                        setTimeout(() => {
-                            stopBenchmarkRecording();
-                        }, 100);
-                        return;
-                    }
-                    previousStage = state;
-                }
-                
-                // Record while actively recording
+                // Simple recording - just record all frames when recording is active
+                // User manually stops via button
                 if (recordingActive) {
                     const elapsed = currentTime - startTime;
                     benchmarkPoseData.push({
@@ -363,12 +331,6 @@ async function startBenchmarkRecording() {
                         arm_angle: armAngle,
                         landmarks: landmarks3D
                     });
-                    
-                    if (state === "pre_shot" || state === "follow_through") {
-                        if (currentTime - lastPrintTime.value >= 0.1) {
-                            lastPrintTime.value = currentTime;
-                        }
-                    }
                 }
             }
         });
@@ -395,9 +357,9 @@ async function startBenchmarkRecording() {
 }
 
 function stopBenchmarkRecording() {
-    // Set stop flag first to prevent further processing
-    benchmarkStopped = true;
+    // Stop recording first
     recordingActive = false;
+    benchmarkStopped = true;
     
     // Stop render loop
     if (benchmarkRenderLoopId !== null) {
