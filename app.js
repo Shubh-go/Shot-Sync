@@ -744,9 +744,17 @@ function generateFeedback(benchmarkData, userData, benchTimes, userTimes, userCl
     const eventNames = ["Start", "Ball Set", "Release", "Follow Through"];
     const eventIssues = [];
     
+    // Debug: log angle data
+    console.log('Benchmark data length:', benchmarkData.length);
+    console.log('User data length:', userData.length);
+    console.log('Bench times:', benchTimes.length);
+    console.log('User times:', userTimes.length);
+    
     for (let i = 0; i < eventNames.length; i++) {
         const benchAngles = getEventAngles(benchmarkData, benchTimes, i);
         const userAngles = getEventAngles(userData, userTimes, i);
+        
+        console.log(`${eventNames[i]} - Bench:`, benchAngles, 'User:', userAngles);
         
         if (benchAngles.elbow !== null && userAngles.elbow !== null) {
             const elbowDiff = Math.abs(userAngles.elbow - benchAngles.elbow);
@@ -825,14 +833,17 @@ function generateFeedback(benchmarkData, userData, benchTimes, userTimes, userCl
         }
     }
     
-    // Always show feedback, even if no specific issues (general tips)
+    // Always show feedback - prioritize specific issues, but always show something
     if (eventIssues.length > 0) {
         feedback.push(...eventIssues.slice(0, 6)); // Show top 6 issues
-    } else {
-        // If no specific issues found, provide general tips
-        if (avgCloseness < 90 && avgCloseness >= 75) {
+    }
+    
+    // Always add some general tips based on score
+    if (avgCloseness < 90) {
+        if (eventIssues.length === 0) {
             feedback.push("💡 TIP: Focus on maintaining consistent elbow position throughout your shot.");
             feedback.push("💡 TIP: Practice snapping your wrist forward at release for better backspin.");
+            feedback.push("💡 TIP: Keep your shooting arm aligned with the rim from start to finish.");
         }
     }
     
@@ -867,7 +878,7 @@ function generateFeedback(benchmarkData, userData, benchTimes, userTimes, userCl
         }
     }
     
-    // 6. Wrist snap consistency (always check this)
+    // 6. Wrist snap consistency (always check this and always show something)
     const releaseAngles = getEventAngles(userData, userTimes, 2);
     const followThroughAngles = getEventAngles(userData, userTimes, 3);
     const benchReleaseAngles = getEventAngles(benchmarkData, benchTimes, 2);
@@ -883,17 +894,20 @@ function generateFeedback(benchmarkData, userData, benchTimes, userTimes, userCl
             feedback.push("💪 WRIST SNAP: You're not snapping your wrist aggressively enough. The snap creates backspin - practice the 'gooseneck' follow-through.");
         } else if (snapDiff > 8) {
             feedback.push("💪 WRIST SNAP: Your wrist snap is too aggressive. Aim for a controlled, smooth snap, not a violent motion.");
-        } else if (Math.abs(snapDiff) > 2) {
-            // Even if close, provide general wrist snap tip
+        } else {
+            // Always provide wrist snap tip
             feedback.push("💪 WRIST SNAP: Focus on snapping your wrist forward at release. This creates backspin for better shot accuracy.");
         }
+    } else {
+        // If we can't calculate, still provide general tip
+        feedback.push("💪 WRIST SNAP: Practice snapping your wrist forward at release for better backspin and accuracy.");
     }
     
-    // 7. General tips if no specific issues found
-    if (eventIssues.length === 0 && avgCloseness < 95) {
-        feedback.push("💡 TIP: Keep your shooting elbow aligned with the rim throughout your shot.");
-        feedback.push("💡 TIP: Practice maintaining consistent form from start to follow-through.");
-    }
+    // 7. Always add elbow position tip
+    feedback.push("🏀 ELBOW POSITION: Keep your shooting elbow aligned with the rim throughout your shot motion.");
+    
+    // 8. Add follow-through tip
+    feedback.push("💪 FOLLOW-THROUGH: Maintain full arm extension after release - don't let your elbow collapse.");
     
     // 7. Positive reinforcement
     if (avgCloseness >= 75) {
