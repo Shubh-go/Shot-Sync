@@ -680,6 +680,216 @@ function computeUserCloseness(benchForm, userForm, path) {
     return userCloseness;
 }
 
+function getEventAngles(shotData, times, eventIdx) {
+    if (times.length === 0 || shotData.length === 0) {
+        return { elbow: null, wrist: null, arm: null };
+    }
+    
+    let targetIdx;
+    if (eventIdx === 0) {
+        targetIdx = 0;
+    } else if (eventIdx === 1) {
+        targetIdx = Math.floor(times.length / 3);
+    } else if (eventIdx === 2) {
+        targetIdx = Math.floor((2 * times.length) / 3);
+    } else {
+        targetIdx = times.length - 1;
+    }
+    
+    if (targetIdx < shotData.length) {
+        const entry = shotData[targetIdx];
+        return {
+            elbow: entry.elbow_angle,
+            wrist: entry.wrist_angle,
+            arm: entry.arm_angle
+        };
+    }
+    return { elbow: null, wrist: null, arm: null };
+}
+
+function generateFeedback(benchmarkData, userData, benchTimes, userTimes, userCloseness) {
+    const feedback = [];
+    
+    // 1. Overall score
+    const avgCloseness = userCloseness.reduce((a, b) => a + b, 0) / userCloseness.length;
+    feedback.push(`Overall Score: ${avgCloseness.toFixed(1)}%`);
+    
+    if (avgCloseness >= 90) {
+        feedback.push("Excellent form! Your shot closely matches the benchmark.");
+    } else if (avgCloseness >= 75) {
+        feedback.push("Good form with room for improvement.");
+    } else if (avgCloseness >= 60) {
+        feedback.push("Your form needs work. Focus on key areas below.");
+    } else {
+        feedback.push("Significant differences detected. Review the specific feedback below.");
+    }
+    
+    // 2. Timing comparison
+    if (benchTimes.length > 1 && userTimes.length > 1) {
+        const benchDuration = benchTimes[benchTimes.length - 1] - benchTimes[0];
+        const userDuration = userTimes[userTimes.length - 1] - userTimes[0];
+        if (benchDuration > 0 && userDuration > 0) {
+            const timeDiffPct = ((userDuration - benchDuration) / benchDuration) * 100;
+            if (Math.abs(timeDiffPct) > 10) {
+                if (timeDiffPct > 0) {
+                    feedback.push(`⏱️ TIMING: Your shot is ${timeDiffPct.toFixed(1)}% slower than the benchmark. Try to maintain a quicker, more fluid motion.`);
+                } else {
+                    feedback.push(`⏱️ TIMING: Your shot is ${Math.abs(timeDiffPct).toFixed(1)}% faster than the benchmark. Consider slowing down slightly for better control.`);
+                }
+            }
+        }
+    }
+    
+    // 3. Key event comparison
+    const eventNames = ["Start", "Ball Set", "Release", "Follow Through"];
+    const eventIssues = [];
+    
+    for (let i = 0; i < eventNames.length; i++) {
+        const benchAngles = getEventAngles(benchmarkData, benchTimes, i);
+        const userAngles = getEventAngles(userData, userTimes, i);
+        
+        if (benchAngles.elbow !== null && userAngles.elbow !== null) {
+            const elbowDiff = Math.abs(userAngles.elbow - benchAngles.elbow);
+            const wristDiff = userAngles.wrist !== null && benchAngles.wrist !== null 
+                ? Math.abs(userAngles.wrist - benchAngles.wrist) : 0;
+            const armDiff = userAngles.arm !== null && benchAngles.arm !== null 
+                ? Math.abs(userAngles.arm - benchAngles.arm) : 0;
+            
+            // Basketball-specific actionable feedback
+            if (eventNames[i] === "Follow Through") {
+                // Wrist snap analysis
+                if (userAngles.wrist !== null && benchAngles.wrist !== null && wristDiff > 10) {
+                    if (userAngles.wrist > benchAngles.wrist + 5) {
+                        eventIssues.push(`💪 ${eventNames[i]}: Your wrist isn't snapping hard enough. Actively snap your wrist forward at release for better follow-through and shot power.`);
+                    } else if (userAngles.wrist < benchAngles.wrist - 5) {
+                        eventIssues.push(`💪 ${eventNames[i]}: Your wrist is over-extending. Focus on a controlled snap - not too hard, not too soft.`);
+                    }
+                }
+                
+                // Elbow extension
+                if (elbowDiff > 10) {
+                    if (userAngles.elbow > benchAngles.elbow + 5) {
+                        eventIssues.push(`💪 ${eventNames[i]}: Keep your arm fully extended after release. Don't let your elbow collapse - maintain full extension for better arc.`);
+                    } else if (userAngles.elbow < benchAngles.elbow - 5) {
+                        eventIssues.push(`💪 ${eventNames[i]}: Your arm is too straight. Maintain a slight natural bend even at full extension.`);
+                    }
+                }
+            } else if (eventNames[i] === "Release") {
+                // Wrist position at release
+                if (userAngles.wrist !== null && benchAngles.wrist !== null && wristDiff > 10) {
+                    if (userAngles.wrist > benchAngles.wrist + 5) {
+                        eventIssues.push(`🎯 ${eventNames[i]}: Your wrist is too bent at release. Snap your wrist forward more aggressively - this creates the backspin for better accuracy.`);
+                    } else if (userAngles.wrist < benchAngles.wrist - 5) {
+                        eventIssues.push(`🎯 ${eventNames[i]}: Release with your wrist in a more bent position, then snap forward. This creates the proper shooting motion.`);
+                    }
+                }
+                
+                // Elbow position at release
+                if (elbowDiff > 15) {
+                    if (userAngles.elbow > benchAngles.elbow + 10) {
+                        eventIssues.push(`🎯 ${eventNames[i]}: Your elbow is too wide (chicken wing). Keep your elbow closer to your body and aligned with the rim.`);
+                    } else if (userAngles.elbow < benchAngles.elbow - 10) {
+                        eventIssues.push(`🎯 ${eventNames[i]}: Your elbow is too tucked in. Find the balance - not too wide, not too tight.`);
+                    }
+                }
+            } else if (eventNames[i] === "Ball Set") {
+                // Shooting pocket position
+                if (elbowDiff > 15) {
+                    if (userAngles.elbow > benchAngles.elbow + 10) {
+                        eventIssues.push(`🏀 ${eventNames[i]}: Your elbow is flaring out. Keep your shooting arm aligned - elbow should point toward the rim, not outward.`);
+                    } else {
+                        eventIssues.push(`🏀 ${eventNames[i]}: Tuck your elbow in slightly more. Your shooting arm should form a smooth L-shape.`);
+                    }
+                }
+                
+                // Wrist preparation
+                if (userAngles.wrist !== null && benchAngles.wrist !== null && wristDiff > 15) {
+                    eventIssues.push(`🏀 ${eventNames[i]}: Prepare your wrist for the shot. Your wrist should be cocked back and ready to snap forward.`);
+                }
+            } else if (eventNames[i] === "Start") {
+                // Initial setup
+                if (elbowDiff > 15) {
+                    if (userAngles.elbow > benchAngles.elbow + 10) {
+                        eventIssues.push(`🏀 ${eventNames[i]}: Start with your elbow closer to your body. Your shooting arm should be relaxed but ready.`);
+                    } else {
+                        eventIssues.push(`🏀 ${eventNames[i]}: Start with your elbow slightly more bent. Prepare your shooting pocket early.`);
+                    }
+                }
+                
+                // Overall form check
+                if (armDiff > 15 && userAngles.arm !== null) {
+                    eventIssues.push(`🏀 ${eventNames[i]}: Check your shooting stance. Your shooting arm should be aligned with your target from the start.`);
+                }
+            }
+        }
+    }
+    
+    feedback.push(...eventIssues.slice(0, 5)); // Show top 5 issues
+    
+    // 4. Identify worst phase
+    if (userCloseness.length > 0) {
+        const minClosenessIdx = userCloseness.indexOf(Math.min(...userCloseness));
+        const minCloseness = userCloseness[minClosenessIdx];
+        if (minCloseness < 70) {
+            const phaseRatio = minClosenessIdx / userCloseness.length;
+            let phaseName;
+            if (phaseRatio < 0.33) {
+                phaseName = "Start/Ball Set";
+            } else if (phaseRatio < 0.67) {
+                phaseName = "Release";
+            } else {
+                phaseName = "Follow Through";
+            }
+            feedback.push(`⚠️ WORST PHASE: ${phaseName} (${minCloseness.toFixed(1)}% match) - Focus on improving this phase.`);
+        }
+    }
+    
+    // 5. Consistency check
+    if (userCloseness.length > 0) {
+        const variance = userCloseness.reduce((acc, val) => {
+            const diff = val - avgCloseness;
+            return acc + diff * diff;
+        }, 0) / userCloseness.length;
+        const stdDev = Math.sqrt(variance);
+        
+        if (stdDev > 15) {
+            feedback.push("⚠️ CONSISTENCY: Your form varies throughout the shot. Focus on maintaining consistent mechanics from start to finish.");
+        }
+    }
+    
+    // 6. Wrist snap consistency
+    const releaseAngles = getEventAngles(userData, userTimes, 2);
+    const followThroughAngles = getEventAngles(userData, userTimes, 3);
+    const benchReleaseAngles = getEventAngles(benchmarkData, benchTimes, 2);
+    const benchFollowThroughAngles = getEventAngles(benchmarkData, benchTimes, 3);
+    
+    if (releaseAngles.wrist !== null && followThroughAngles.wrist !== null &&
+        benchReleaseAngles.wrist !== null && benchFollowThroughAngles.wrist !== null) {
+        const userWristSnap = releaseAngles.wrist - followThroughAngles.wrist;
+        const benchWristSnap = benchReleaseAngles.wrist - benchFollowThroughAngles.wrist;
+        const snapDiff = userWristSnap - benchWristSnap;
+        
+        if (snapDiff < -5) {
+            feedback.push("💪 WRIST SNAP: You're not snapping your wrist aggressively enough. The snap creates backspin - practice the 'gooseneck' follow-through.");
+        } else if (snapDiff > 10) {
+            feedback.push("💪 WRIST SNAP: Your wrist snap is too aggressive. Aim for a controlled, smooth snap, not a violent motion.");
+        }
+    }
+    
+    // 7. Positive reinforcement
+    if (avgCloseness >= 75) {
+        const maxCloseness = Math.max(...userCloseness);
+        if (maxCloseness > 95) {
+            feedback.push("✅ Great job! Some phases match the benchmark perfectly.");
+        }
+        if (avgCloseness >= 85) {
+            feedback.push("💡 TIP: Your form is solid! Focus on repetition to build muscle memory.");
+        }
+    }
+    
+    return feedback;
+}
+
 function compareShots() {
     document.getElementById('step2').classList.remove('active');
     document.getElementById('step2').style.display = 'none';
@@ -700,21 +910,14 @@ function compareShots() {
         const { distance, path } = dtw(benchForm.formVals, userForm.formVals);
         const userCloseness = computeUserCloseness(benchForm.formVals, userForm.formVals, path);
         
-        const avgCloseness = userCloseness.reduce((a, b) => a + b, 0) / userCloseness.length;
-        
-        // Generate feedback
-        const feedback = [];
-        feedback.push(`Overall Score: ${avgCloseness.toFixed(1)}%`);
-        
-        if (avgCloseness >= 90) {
-            feedback.push("Excellent form! Your shot closely matches the benchmark.");
-        } else if (avgCloseness >= 75) {
-            feedback.push("Good form with room for improvement.");
-        } else if (avgCloseness >= 60) {
-            feedback.push("Your form needs work. Focus on key areas.");
-        } else {
-            feedback.push("Significant differences detected. Review the feedback below.");
-        }
+        // Generate detailed feedback
+        const feedback = generateFeedback(
+            benchmarkPoseData,
+            userPoseData,
+            benchForm.times,
+            userForm.times,
+            userCloseness
+        );
         
         displayResults({
             benchTimes: benchForm.times,
