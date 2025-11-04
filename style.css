@@ -214,6 +214,124 @@ canvas {
     border-left: 4px solid #667eea;
 }
 
+.intro-section {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.intro-text {
+    font-size: 1.1em;
+    line-height: 1.8;
+    color: #666;
+    max-width: 800px;
+    margin: 0 auto 30px;
+}
+
+.how-it-works {
+    background: #f8f9fa;
+    padding: 25px;
+    border-radius: 10px;
+    margin: 30px auto;
+    max-width: 600px;
+    text-align: left;
+}
+
+.how-it-works h3 {
+    margin-bottom: 20px;
+    color: #333;
+    text-align: center;
+}
+
+.how-it-works ol {
+    padding-left: 25px;
+}
+
+.how-it-works li {
+    margin-bottom: 12px;
+    line-height: 1.6;
+    color: #555;
+}
+
+.player-selection {
+    margin-top: 40px;
+}
+
+.player-selection h3 {
+    text-align: center;
+    margin-bottom: 30px;
+    color: #333;
+    font-size: 1.5em;
+}
+
+.player-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 20px;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.player-btn {
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 25px 15px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.player-btn:hover {
+    border-color: #667eea;
+    transform: translateY(-5px);
+    box-shadow: 0 5px 20px rgba(102, 126, 234, 0.3);
+}
+
+.player-icon {
+    font-size: 2.5em;
+    margin-bottom: 5px;
+}
+
+.player-name {
+    font-weight: 600;
+    color: #333;
+    font-size: 1em;
+}
+
+.player-description {
+    font-size: 0.85em;
+    color: #888;
+    margin-top: 5px;
+}
+
+.custom-explanation {
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+    padding: 15px 20px;
+    border-radius: 5px;
+    margin-top: 20px;
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.custom-explanation p {
+    margin: 0;
+    color: #856404;
+    line-height: 1.6;
+}
+
+.step-description {
+    text-align: center;
+    color: #666;
+    margin-bottom: 20px;
+    font-style: italic;
+}
+
 @media (max-width: 768px) {
     .main-content {
         padding: 20px;
@@ -229,6 +347,19 @@ canvas {
     
     .btn {
         width: 100%;
+    }
+    
+    .player-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+    }
+    
+    .player-btn {
+        padding: 20px 10px;
+    }
+    
+    .player-icon {
+        font-size: 2em;
     }
 }
 

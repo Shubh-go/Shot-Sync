@@ -21,9 +21,78 @@
         </header>
 
         <div class="main-content">
-            <!-- Step 1: Record Benchmark -->
-            <section id="step1" class="step active">
-                <h2>Step 1: Record Benchmark Shot</h2>
+            <!-- Step 0: Landing Page / Player Selection -->
+            <section id="step0" class="step active">
+                <div class="intro-section">
+                    <h2>Welcome to Shot Sync</h2>
+                    <p class="intro-text">
+                        Analyze your basketball shooting form by comparing it to professional players or your own benchmark shot. 
+                        Our AI-powered system uses pose detection to analyze your mechanics and provide detailed feedback.
+                    </p>
+                    <div class="how-it-works">
+                        <h3>How It Works</h3>
+                        <ol>
+                            <li>Select a player to compare against</li>
+                            <li>Record your shot using your webcam</li>
+                            <li>Get instant analysis with actionable feedback</li>
+                        </ol>
+                    </div>
+                </div>
+                
+                <div class="player-selection">
+                    <h3>Compare Your Shot To:</h3>
+                    <div class="player-grid">
+                        <button class="player-btn" data-player="curry">
+                            <div class="player-icon">🏀</div>
+                            <div class="player-name">Stephen Curry</div>
+                        </button>
+                        <button class="player-btn" data-player="lebron">
+                            <div class="player-icon">👑</div>
+                            <div class="player-name">LeBron James</div>
+                        </button>
+                        <button class="player-btn" data-player="jordan">
+                            <div class="player-icon">✈️</div>
+                            <div class="player-name">Michael Jordan</div>
+                        </button>
+                        <button class="player-btn" data-player="durant">
+                            <div class="player-icon">🎯</div>
+                            <div class="player-name">Kevin Durant</div>
+                        </button>
+                        <button class="player-btn" data-player="clark">
+                            <div class="player-icon">⭐</div>
+                            <div class="player-name">Caitlin Clark</div>
+                        </button>
+                        <button class="player-btn" data-player="custom">
+                            <div class="player-icon">📹</div>
+                            <div class="player-name">Custom Benchmark</div>
+                            <div class="player-description">Record your own ideal form</div>
+                        </button>
+                    </div>
+                    <div class="custom-explanation" id="customExplanation" style="display: none;">
+                        <p><strong>Custom Benchmark:</strong> First, record your ideal shooting form (the benchmark). Then record your shot to compare against it. This helps you establish your personal baseline and track improvement over time.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 1: Record Benchmark (for Custom) or Record Shot (for Pro Players) -->
+            <section id="step1" class="step" style="display: none;">
+                <h2 id="step1Title">Step 1: Record Benchmark Shot</h2>
+                <div class="video-container">
+                    <video id="benchmarkVideo" autoplay playsinline muted style="display: none;"></video>
+                    <canvas id="benchmarkOutput"></canvas>
+                </div>
+                <div class="controls">
+                    <button id="startBenchmark" class="btn btn-primary">Start Recording</button>
+                    <button id="stopBenchmark" class="btn btn-secondary" disabled>Stop Recording</button>
+                    <button id="retakeBenchmark" class="btn btn-warning" style="display: none;">Retake</button>
+                </div>
+                <div id="benchmarkStatus" class="status"></div>
+            </section>
+
+            <!-- Step 1.5: Record Benchmark (for Custom only) -->
+            <section id="step1_5" class="step" style="display: none;">
+                <h2>Step 1: Record Your Benchmark Shot</h2>
+                <p class="step-description">Record your ideal shooting form. This will be used as the benchmark for comparison.</p>
                 <div class="video-container">
                     <video id="benchmarkVideo" autoplay playsinline muted style="display: none;"></video>
                     <canvas id="benchmarkOutput"></canvas>
@@ -38,7 +107,7 @@
 
             <!-- Step 2: Record User Shot -->
             <section id="step2" class="step" style="display: none;">
-                <h2>Step 2: Record Your Shot</h2>
+                <h2 id="step2Title">Step 2: Record Your Shot</h2>
                 <div class="video-container">
                     <video id="userVideo" autoplay playsinline muted style="display: none;"></video>
                     <canvas id="userOutput"></canvas>

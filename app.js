@@ -591,6 +591,14 @@ function stopUserRecording() {
         document.getElementById('userStatus').className = 'status success';
         document.getElementById('retakeUser').style.display = 'inline-block';
         
+        // For pro players, if no benchmark exists yet, use current user data as placeholder
+        if (selectedPlayer && selectedPlayer !== 'custom' && !proPlayerBenchmarks[selectedPlayer]) {
+            // Store current user data as placeholder benchmark
+            proPlayerBenchmarks[selectedPlayer] = [...userPoseData];
+            // For comparison, we'll use the same data (self-comparison for demo)
+            benchmarkPoseData = [...userPoseData];
+        }
+        
         compareShots();
     }
 }
@@ -932,7 +940,23 @@ function compareShots() {
     document.getElementById('results').style.display = 'none';
     
     setTimeout(() => {
-        const benchForm = extractFormSeries(benchmarkPoseData);
+        // For pro players, use stored benchmark or current benchmark
+        let benchmarkData = benchmarkPoseData;
+        let benchTimes = [];
+        let benchForm = { times: [], formVals: [] };
+        
+        if (selectedPlayer && selectedPlayer !== 'custom') {
+            // Use stored benchmark for pro player
+            if (proPlayerBenchmarks[selectedPlayer]) {
+                benchmarkData = proPlayerBenchmarks[selectedPlayer];
+            } else {
+                // Use current benchmark as placeholder (store it for this player)
+                benchmarkData = benchmarkPoseData;
+                proPlayerBenchmarks[selectedPlayer] = [...benchmarkPoseData];
+            }
+        }
+        
+        benchForm = extractFormSeries(benchmarkData);
         const userForm = extractFormSeries(userPoseData);
         
         if (benchForm.times.length < 2 || userForm.times.length < 2) {
@@ -945,7 +969,7 @@ function compareShots() {
         
         // Generate detailed feedback
         const feedback = generateFeedback(
-            benchmarkPoseData,
+            benchmarkData,
             userPoseData,
             benchForm.times,
             userForm.times,
@@ -956,7 +980,8 @@ function compareShots() {
             benchTimes: benchForm.times,
             userTimes: userForm.times,
             userCloseness: userCloseness,
-            feedback: feedback
+            feedback: feedback,
+            playerName: selectedPlayer
         });
     }, 500);
 }
@@ -966,7 +991,21 @@ function displayResults(data) {
     document.getElementById('results').style.display = 'block';
     
     const avgCloseness = data.userCloseness.reduce((a, b) => a + b, 0) / data.userCloseness.length;
-    document.getElementById('overallScore').textContent = `Overall Score: ${avgCloseness.toFixed(1)}%`;
+    
+    // Add player name to title if applicable
+    const playerNames = {
+        'curry': 'Stephen Curry',
+        'lebron': 'LeBron James',
+        'jordan': 'Michael Jordan',
+        'durant': 'Kevin Durant',
+        'clark': 'Caitlin Clark'
+    };
+    
+    let title = `Overall Score: ${avgCloseness.toFixed(1)}%`;
+    if (data.playerName && data.playerName !== 'custom') {
+        title += ` (vs ${playerNames[data.playerName]})`;
+    }
+    document.getElementById('overallScore').textContent = title;
     
     const ctx = document.getElementById('comparisonChart').getContext('2d');
     
@@ -1036,6 +1075,14 @@ function displayResults(data) {
 document.addEventListener('DOMContentLoaded', () => {
     initializePose();
     
+    // Player selection buttons
+    document.querySelectorAll('.player-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const player = btn.dataset.player;
+            selectPlayer(player);
+        });
+    });
+    
     document.getElementById('startBenchmark').addEventListener('click', startBenchmarkRecording);
     document.getElementById('stopBenchmark').addEventListener('click', stopBenchmarkRecording);
     document.getElementById('retakeBenchmark').addEventListener('click', retakeBenchmark);
@@ -1046,6 +1093,52 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById('newComparison').addEventListener('click', resetApp);
 });
+
+function selectPlayer(player) {
+    selectedPlayer = player;
+    
+    // Hide landing page
+    document.getElementById('step0').classList.remove('active');
+    document.getElementById('step0').style.display = 'none';
+    
+    // Show custom explanation if custom selected
+    const customExplanation = document.getElementById('customExplanation');
+    if (player === 'custom') {
+        customExplanation.style.display = 'block';
+    } else {
+        customExplanation.style.display = 'none';
+    }
+    
+    if (player === 'custom') {
+        // Custom mode: show benchmark recording step
+        document.getElementById('step1Title').textContent = 'Step 1: Record Benchmark Shot';
+        document.getElementById('step1').classList.add('active');
+        document.getElementById('step1').style.display = 'block';
+    } else {
+        // Pro player mode: skip benchmark, go straight to user recording
+        // For now, use current user's benchmark as placeholder
+        // In production, you'd load pre-recorded benchmarks here
+        const playerNames = {
+            'curry': 'Stephen Curry',
+            'lebron': 'LeBron James',
+            'jordan': 'Michael Jordan',
+            'durant': 'Kevin Durant',
+            'clark': 'Caitlin Clark'
+        };
+        
+        document.getElementById('step2Title').textContent = `Record Your Shot (vs ${playerNames[player]})`;
+        document.getElementById('step2').classList.add('active');
+        document.getElementById('step2').style.display = 'block';
+        
+        // For now, we'll use a placeholder benchmark
+        // In production, load actual player benchmarks from server/localStorage
+        // For demo: prompt user to record benchmark first, then store it
+        if (!proPlayerBenchmarks[player]) {
+            // Show message that we'll use their benchmark
+            alert(`For now, we'll use your current shooting form as the ${playerNames[player]} benchmark. In a full version, this would be pre-loaded with professional player data.`);
+        }
+    }
+}
 
 function retakeBenchmark() {
     benchmarkPoseData = [];
@@ -1073,9 +1166,15 @@ function resetApp() {
     userCamera = null;
     benchmarkStream = null;
     userStream = null;
+    selectedPlayer = null;
     
-    document.getElementById('step1').classList.add('active');
-    document.getElementById('step1').style.display = 'block';
+    // Reset to landing page
+    document.getElementById('step0').classList.add('active');
+    document.getElementById('step0').style.display = 'block';
+    document.getElementById('step1').classList.remove('active');
+    document.getElementById('step1').style.display = 'none';
+    document.getElementById('step1_5').classList.remove('active');
+    document.getElementById('step1_5').style.display = 'none';
     document.getElementById('step2').classList.remove('active');
     document.getElementById('step2').style.display = 'none';
     document.getElementById('step3').classList.remove('active');
@@ -1088,6 +1187,8 @@ function resetApp() {
     
     document.getElementById('retakeBenchmark').style.display = 'none';
     document.getElementById('retakeUser').style.display = 'none';
+    
+    document.getElementById('customExplanation').style.display = 'none';
     
     if (comparisonChart) {
         comparisonChart.destroy();
