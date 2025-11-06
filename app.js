@@ -115,6 +115,58 @@ let userPose = null;
 
 // ====================== MEDIAPIPE SETUP ======================
 
+// POSE_CONNECTIONS - MediaPipe Pose landmark connections
+const POSE_CONNECTIONS = [
+    [11, 12], [11, 13], [13, 15], [15, 17], [15, 19], [15, 21], [17, 19], [12, 14],
+    [14, 16], [16, 18], [16, 20], [16, 22], [18, 20], [11, 23], [12, 24], [23, 24],
+    [23, 25], [24, 26], [25, 27], [26, 28], [27, 29], [28, 30], [27, 31], [28, 32],
+    [29, 31], [30, 32]
+];
+
+// Drawing utility functions
+function drawConnections(ctx, points, connections, style) {
+    const { color = '#00FF00', lineWidth = 2 } = style || {};
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.beginPath();
+    
+    const canvas = ctx.canvas;
+    const width = canvas.width || canvas.offsetWidth || 640;
+    const height = canvas.height || canvas.offsetHeight || 480;
+    
+    for (const [startIdx, endIdx] of connections) {
+        const start = points[startIdx];
+        const end = points[endIdx];
+        if (start && end && start.visibility > 0.5 && end.visibility > 0.5) {
+            ctx.moveTo(start.x * width, start.y * height);
+            ctx.lineTo(end.x * width, end.y * height);
+        }
+    }
+    
+    ctx.stroke();
+}
+
+function drawLandmarks(ctx, points, style) {
+    const { color = '#00FF00', lineWidth = 1, radius = 3 } = style || {};
+    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    
+    const canvas = ctx.canvas;
+    const width = canvas.width || canvas.offsetWidth || 640;
+    const height = canvas.height || canvas.offsetHeight || 480;
+    
+    for (const point of points) {
+        if (point && point.visibility > 0.5) {
+            const x = point.x * width;
+            const y = point.y * height;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+    }
+}
+
 function initializePose() {
     // Initialize MediaPipe Pose
     const poseOptions = {
