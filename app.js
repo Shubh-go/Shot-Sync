@@ -757,8 +757,17 @@ function compareShots() {
 }
 
 function displayResults(data) {
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('results').style.display = 'block';
+    console.log('displayResults called with data:', data);
+    const loadingEl = document.getElementById('loading');
+    const resultsEl = document.getElementById('results');
+    
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (resultsEl) {
+        resultsEl.style.display = 'block';
+        console.log('Results section displayed');
+    } else {
+        console.error('results element not found!');
+    }
     
     const avgCloseness = data.userCloseness.reduce((a, b) => a + b, 0) / data.userCloseness.length;
     
