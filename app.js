@@ -950,6 +950,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check if user is already signed in
     if (window.onAuthStateChangedHandler && window.firebaseAuth) {
         window.onAuthStateChangedHandler(window.firebaseAuth, (user) => {
+            // Always ensure landing page is shown first, regardless of auth state
+            const step0 = document.getElementById('step0');
+            const step0_5 = document.getElementById('step0_5');
+            if (step0 && step0_5) {
+                // Only show landing page if we're not already on a later step
+                const currentActiveStep = document.querySelector('.step.active');
+                if (!currentActiveStep || currentActiveStep.id === 'step0' || currentActiveStep.id === 'step0_5') {
+                    step0.classList.add('active');
+                    step0.style.display = 'block';
+                    step0_5.classList.remove('active');
+                    step0_5.style.display = 'none';
+                }
+            }
+            
             if (user) {
                 // User is signed in, update profile and show it
                 updateProfileUI(user);
@@ -960,31 +974,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Store user info
                 userInfo = { firstName, lastName, email };
-                
-                // Don't auto-advance - let user see landing page first
-                // They can click "Sign in with Google" to proceed
-                // Only show profile, don't change the current step
             } else {
-                // User is signed out, hide profile and show landing page
+                // User is signed out, hide profile
                 hideProfileUI();
-                
-                // Make sure we're on step 0 (landing page)
-                const step0 = document.getElementById('step0');
-                const step0_5 = document.getElementById('step0_5');
-                if (step0 && step0_5) {
-                    step0.classList.add('active');
-                    step0.style.display = 'block';
-                    step0_5.classList.remove('active');
-                    step0_5.style.display = 'none';
-                }
             }
         });
     } else {
         // Firebase not initialized or not available - show landing page
         const step0 = document.getElementById('step0');
-        if (step0) {
+        const step0_5 = document.getElementById('step0_5');
+        if (step0 && step0_5) {
             step0.classList.add('active');
             step0.style.display = 'block';
+            step0_5.classList.remove('active');
+            step0_5.style.display = 'none';
         }
     }
     
