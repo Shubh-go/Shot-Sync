@@ -951,16 +951,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Store user info
                 userInfo = { firstName, lastName, email };
                 
-                // Automatically move to player selection if user is already signed in
-                document.getElementById('step0').classList.remove('active');
-                document.getElementById('step0').style.display = 'none';
-                document.getElementById('step0_5').classList.add('active');
-                document.getElementById('step0_5').style.display = 'block';
+                // Only auto-advance if we're currently on step 0 (landing page)
+                // Don't force navigation if user is on a different step
+                const currentStep = document.querySelector('.step.active');
+                if (currentStep && currentStep.id === 'step0') {
+                    // Automatically move to player selection if user is already signed in
+                    document.getElementById('step0').classList.remove('active');
+                    document.getElementById('step0').style.display = 'none';
+                    document.getElementById('step0_5').classList.add('active');
+                    document.getElementById('step0_5').style.display = 'block';
+                }
             } else {
-                // User is signed out, hide profile
+                // User is signed out, hide profile and show landing page
                 hideProfileUI();
+                
+                // Make sure we're on step 0 (landing page)
+                const step0 = document.getElementById('step0');
+                const step0_5 = document.getElementById('step0_5');
+                if (step0 && step0_5) {
+                    step0.classList.add('active');
+                    step0.style.display = 'block';
+                    step0_5.classList.remove('active');
+                    step0_5.style.display = 'none';
+                }
             }
         });
+    } else {
+        // Firebase not initialized or not available - show landing page
+        const step0 = document.getElementById('step0');
+        if (step0) {
+            step0.classList.add('active');
+            step0.style.display = 'block';
+        }
     }
     
     document.getElementById('startBenchmark').addEventListener('click', startBenchmarkRecording);
