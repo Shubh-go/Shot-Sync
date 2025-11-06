@@ -917,8 +917,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
-        if (profileMenu && !profileButton.contains(e.target) && !profileMenu.contains(e.target)) {
-            profileMenu.style.display = 'none';
+        if (profileMenu && profileButton) {
+            const clickedInside = profileButton.contains(e.target) || profileMenu.contains(e.target);
+            if (!clickedInside) {
+                profileMenu.style.display = 'none';
+            }
         }
     });
     
