@@ -298,35 +298,35 @@
                     </div>
                     <!-- Detailed Feedback Section -->
                     <div id="detailedFeedback" class="detailed-feedback-section" style="display: none;">
-                        <div class="feedback-header">
-                            <h3>Your Jump Shot Analysis</h3>
-                            <p id="playerComparisonTitle" class="player-comparison-title"></p>
-                        </div>
+                        <h3 id="playerComparisonTitle">Shot Analysis</h3>
                         
-                        <div class="feedback-grid">
-                            <div class="strengths-card">
-                                <h4>✨ Strengths</h4>
-                                <div id="strengthsList"></div>
-                            </div>
-                            
-                            <div class="weaknesses-card">
-                                <h4>📈 Areas for Improvement</h4>
-                                <div id="weaknessesList"></div>
-                            </div>
-                        </div>
-                        
-                        <div class="metrics-section">
-                            <h4>📊 Key Metrics</h4>
-                            <div id="metricsList" class="metrics-grid"></div>
-                        </div>
-                        
+                        <!-- Summary -->
                         <div class="summary-section">
-                            <h4>📝 Summary</h4>
-                            <p id="shotSummary"></p>
+                            <h4>Summary</h4>
+                            <p id="shotSummary" class="summary-text"></p>
+                        </div>
+                        
+                        <!-- Strengths -->
+                        <div class="strengths-section">
+                            <h4>✨ Strengths</h4>
+                            <div id="strengthsList" class="feedback-list"></div>
+                        </div>
+                        
+                        <!-- Weaknesses -->
+                        <div class="weaknesses-section">
+                            <h4>📈 Areas for Improvement</h4>
+                            <div id="weaknessesList" class="feedback-list"></div>
+                        </div>
+                        
+                        <!-- Metrics -->
+                        <div class="metrics-section">
+                            <h4>📊 Detailed Metrics</h4>
+                            <div id="metricsList" class="metrics-grid"></div>
                         </div>
                     </div>
                     
-                    <div class="feedback-section" id="oldFeedbackSection" style="display: none;">
+                    <!-- Old Feedback Section (hidden by default) -->
+                    <div class="feedback-section" style="display: none;">
                         <h3>Feedback & Recommendations</h3>
                         <div id="feedbackList"></div>
                     </div>

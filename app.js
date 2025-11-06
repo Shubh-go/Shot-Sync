@@ -756,6 +756,92 @@ function compareShots() {
     }, 500);
 }
 
+function displayResults(data) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('results').style.display = 'block';
+    
+    const avgCloseness = data.userCloseness.reduce((a, b) => a + b, 0) / data.userCloseness.length;
+    
+    // Add player name to title if applicable
+    const playerNames = {
+        'curry': 'Stephen Curry',
+        'lebron': 'LeBron James',
+        'jordan': 'Michael Jordan',
+        'durant': 'Kevin Durant',
+        'clark': 'Caitlin Clark'
+    };
+    
+    let title = `Overall Score: ${avgCloseness.toFixed(1)}%`;
+    if (data.playerName && data.playerName !== 'custom') {
+        title += ` (vs ${playerNames[data.playerName]})`;
+    }
+    document.getElementById('overallScore').textContent = title;
+    
+    const ctx = document.getElementById('comparisonChart').getContext('2d');
+    
+    if (comparisonChart) {
+        comparisonChart.destroy();
+    }
+    
+    comparisonChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.userTimes.map(t => t.toFixed(2)),
+            datasets: [{
+                label: 'Benchmark (100%)',
+                data: data.benchTimes.map(() => 100),
+                borderColor: 'rgb(255, 159, 64)',
+                borderDash: [5, 5],
+                borderWidth: 2,
+                pointRadius: 0
+            }, {
+                label: 'Your Shot',
+                data: data.userCloseness,
+                borderColor: 'rgb(54, 162, 235)',
+                borderWidth: 2,
+                fill: false,
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Shot Form Analysis'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 110,
+                    title: {
+                        display: true,
+                        text: 'Closeness to Benchmark (%)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Time (seconds)'
+                    }
+                }
+            }
+        }
+    });
+    
+    // Generate and display detailed feedback
+    const detailedFeedback = generatePlayerSpecificFeedback(data);
+    displayDetailedFeedback(detailedFeedback, data.playerName);
+    
+    // Hide old feedback section
+    const oldFeedbackSection = document.getElementById('oldFeedbackSection');
+    if (oldFeedbackSection) {
+        oldFeedbackSection.style.display = 'none';
+    }
+}
+
 function generatePlayerSpecificFeedback(data) {
     const player = data.playerName;
     if (!player || player === 'custom') {
@@ -986,97 +1072,6 @@ function generateGenericFeedback(data) {
         metrics: [{ label: 'Overall Score', value: `${avgCloseness.toFixed(1)}%`, ideal: '100%', score: avgCloseness }],
         summary: `Your shot analysis shows ${avgCloseness > 75 ? 'strong' : avgCloseness > 60 ? 'moderate' : 'room for improvement in'} similarity to the benchmark. Keep practicing to improve your consistency!`
     };
-}
-
-function displayResults(data) {
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('results').style.display = 'block';
-    
-    const avgCloseness = data.userCloseness.reduce((a, b) => a + b, 0) / data.userCloseness.length;
-    
-    // Add player name to title if applicable
-    const playerNames = {
-        'curry': 'Stephen Curry',
-        'lebron': 'LeBron James',
-        'jordan': 'Michael Jordan',
-        'durant': 'Kevin Durant',
-        'clark': 'Caitlin Clark'
-    };
-    
-    let title = `Overall Score: ${avgCloseness.toFixed(1)}%`;
-    if (data.playerName && data.playerName !== 'custom') {
-        title += ` (vs ${playerNames[data.playerName]})`;
-    }
-    document.getElementById('overallScore').textContent = title;
-    
-    const ctx = document.getElementById('comparisonChart').getContext('2d');
-    
-    if (comparisonChart) {
-        comparisonChart.destroy();
-    }
-    
-    comparisonChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.userTimes.map(t => t.toFixed(2)),
-            datasets: [{
-                label: 'Benchmark (100%)',
-                data: data.benchTimes.map(() => 100),
-                borderColor: 'rgb(255, 159, 64)',
-                borderDash: [5, 5],
-                borderWidth: 2,
-                pointRadius: 0
-            }, {
-                label: 'Your Shot',
-                data: data.userCloseness,
-                borderColor: 'rgb(54, 162, 235)',
-                borderWidth: 2,
-                fill: false,
-                tension: 0.1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'Shot Form Analysis'
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 110,
-                    title: {
-                        display: true,
-                        text: 'Closeness to Benchmark (%)'
-                    }
-                },
-                x: {
-                    title: {
-                        display: true,
-                        text: 'Time (seconds)'
-                    }
-                }
-            }
-        }
-    });
-    
-    // Generate and display detailed feedback
-    const detailedFeedback = generatePlayerSpecificFeedback(data);
-    displayDetailedFeedback(detailedFeedback, data.playerName);
-    
-    // Hide old feedback section
-    const oldFeedbackSection = document.getElementById('oldFeedbackSection');
-    if (oldFeedbackSection) {
-        oldFeedbackSection.style.display = 'none';
-    }
-    
-    // Automatically send email if user info is available (silently in background)
-    if (userInfo) {
-        sendEmailAutomatically(data).catch(err => console.log('Email send failed:', err));
-    }
 }
 
 function displayDetailedFeedback(feedback, playerName) {
