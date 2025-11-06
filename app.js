@@ -1088,89 +1088,109 @@ function displayDetailedFeedback(feedback, playerName) {
     const detailedFeedbackSection = document.getElementById('detailedFeedback');
     if (!detailedFeedbackSection) {
         console.error('detailedFeedback element not found');
+        // Try to find it after a short delay in case DOM isn't ready
+        setTimeout(() => {
+            const retry = document.getElementById('detailedFeedback');
+            if (retry) {
+                retry.style.display = 'block';
+                populateFeedbackContent(feedback, playerName);
+            }
+        }, 100);
         return;
     }
     
     console.log('Displaying detailed feedback:', feedback, playerName);
     detailedFeedbackSection.style.display = 'block';
+    populateFeedbackContent(feedback, playerName);
+}
+
+function populateFeedbackContent(feedback, playerName) {
     
     // Set player comparison title
     const titleEl = document.getElementById('playerComparisonTitle');
-    if (titleEl && playerName && playerName !== 'custom') {
-        titleEl.textContent = `Comparing your shot to ${feedback.name}'s ${feedback.niche}`;
-    } else {
-        titleEl.textContent = 'Detailed shot analysis';
+    if (titleEl) {
+        if (playerName && playerName !== 'custom' && feedback.name) {
+            titleEl.textContent = `Comparing your shot to ${feedback.name}'s ${feedback.niche}`;
+        } else {
+            titleEl.textContent = 'Detailed shot analysis';
+        }
+    }
+    
+    // Display summary
+    const summaryEl = document.getElementById('shotSummary');
+    if (summaryEl && feedback.summary) {
+        summaryEl.textContent = feedback.summary;
     }
     
     // Display strengths
     const strengthsList = document.getElementById('strengthsList');
-    strengthsList.innerHTML = '';
-    if (feedback.strengths.length > 0) {
-        feedback.strengths.forEach(strength => {
-            const item = document.createElement('div');
-            item.className = 'feedback-item strength-item';
-            item.innerHTML = `
-                <div class="feedback-item-header">
-                    <span class="feedback-title">${strength.title}</span>
-                    <span class="feedback-score">${strength.score.toFixed(0)}%</span>
-                </div>
-                <div class="feedback-values">
-                    <span class="feedback-value">Your: ${strength.value}</span>
-                    <span class="feedback-ideal">Ideal: ${strength.ideal}</span>
-                </div>
-            `;
-            strengthsList.appendChild(item);
-        });
-    } else {
-        strengthsList.innerHTML = '<p class="no-feedback">Keep practicing to develop your strengths!</p>';
+    if (strengthsList) {
+        strengthsList.innerHTML = '';
+        if (feedback.strengths && feedback.strengths.length > 0) {
+            feedback.strengths.forEach(strength => {
+                const item = document.createElement('div');
+                item.className = 'feedback-item strength-item';
+                item.innerHTML = `
+                    <div class="feedback-item-header">
+                        <span class="feedback-title">${strength.title}</span>
+                        <span class="feedback-score">${strength.score.toFixed(0)}%</span>
+                    </div>
+                    <div class="feedback-values">
+                        <span class="feedback-value">Your: ${strength.value}</span>
+                        <span class="feedback-ideal">Ideal: ${strength.ideal}</span>
+                    </div>
+                `;
+                strengthsList.appendChild(item);
+            });
+        } else {
+            strengthsList.innerHTML = '<p class="no-feedback">Keep practicing to develop your strengths!</p>';
+        }
     }
     
     // Display weaknesses
     const weaknessesList = document.getElementById('weaknessesList');
-    weaknessesList.innerHTML = '';
-    if (feedback.weaknesses.length > 0) {
-        feedback.weaknesses.forEach(weakness => {
-            const item = document.createElement('div');
-            item.className = 'feedback-item weakness-item';
-            item.innerHTML = `
-                <div class="feedback-item-header">
-                    <span class="feedback-title">${weakness.title}</span>
-                    <span class="feedback-score">${weakness.score.toFixed(0)}%</span>
-                </div>
-                <div class="feedback-values">
-                    <span class="feedback-value">Your: ${weakness.value}</span>
-                    <span class="feedback-ideal">Ideal: ${weakness.ideal}</span>
-                </div>
-                ${weakness.tip ? `<p class="feedback-tip">💡 ${weakness.tip}</p>` : ''}
-            `;
-            weaknessesList.appendChild(item);
-        });
-    } else {
-        weaknessesList.innerHTML = '<p class="no-feedback">Excellent! No major areas need improvement.</p>';
+    if (weaknessesList) {
+        weaknessesList.innerHTML = '';
+        if (feedback.weaknesses && feedback.weaknesses.length > 0) {
+            feedback.weaknesses.forEach(weakness => {
+                const item = document.createElement('div');
+                item.className = 'feedback-item weakness-item';
+                item.innerHTML = `
+                    <div class="feedback-item-header">
+                        <span class="feedback-title">${weakness.title}</span>
+                        <span class="feedback-score">${weakness.score.toFixed(0)}%</span>
+                    </div>
+                    <div class="feedback-values">
+                        <span class="feedback-value">Your: ${weakness.value}</span>
+                        <span class="feedback-ideal">Ideal: ${weakness.ideal}</span>
+                    </div>
+                    ${weakness.tip ? `<p class="feedback-tip">💡 ${weakness.tip}</p>` : ''}
+                `;
+                weaknessesList.appendChild(item);
+            });
+        } else {
+            weaknessesList.innerHTML = '<p class="no-feedback">Excellent! No major areas need improvement.</p>';
+        }
     }
     
     // Display metrics
     const metricsList = document.getElementById('metricsList');
-    metricsList.innerHTML = '';
-    feedback.metrics.forEach(metric => {
-        const item = document.createElement('div');
-        item.className = 'metric-item';
-        item.innerHTML = `
-            <div class="metric-label">${metric.label}</div>
-            <div class="metric-value">${metric.value}</div>
-            <div class="metric-ideal">Ideal: ${metric.ideal}</div>
-            <div class="metric-bar">
-                <div class="metric-bar-fill" style="width: ${metric.score}%"></div>
-            </div>
-            <div class="metric-score">${metric.score.toFixed(0)}%</div>
-        `;
-        metricsList.appendChild(item);
-    });
-    
-    // Display summary
-    const summaryEl = document.getElementById('shotSummary');
-    if (summaryEl) {
-        summaryEl.textContent = feedback.summary;
+    if (metricsList && feedback.metrics) {
+        metricsList.innerHTML = '';
+        feedback.metrics.forEach(metric => {
+            const item = document.createElement('div');
+            item.className = 'metric-item';
+            item.innerHTML = `
+                <div class="metric-label">${metric.label}</div>
+                <div class="metric-value">${metric.value}</div>
+                <div class="metric-ideal">Ideal: ${metric.ideal}</div>
+                <div class="metric-bar">
+                    <div class="metric-bar-fill" style="width: ${Math.max(0, Math.min(100, metric.score))}%"></div>
+                </div>
+                <div class="metric-score">${metric.score.toFixed(0)}%</div>
+            `;
+            metricsList.appendChild(item);
+        });
     }
 }
 
