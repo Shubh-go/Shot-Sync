@@ -301,7 +301,7 @@ async function startBenchmarkRecording() {
             
             // Draw the video frame
             if (results.image) {
-                ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
             }
             
             if (results.poseLandmarks) {
@@ -476,7 +476,7 @@ async function startUserRecording() {
             
             // Draw the video frame
             if (results.image) {
-                ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
             }
             
             if (results.poseLandmarks) {
@@ -832,10 +832,24 @@ function displayResults(data) {
     });
     
     // Generate and display detailed feedback
-    console.log('Generating feedback for player:', data.playerName, 'Data:', data);
-    const detailedFeedback = generatePlayerSpecificFeedback(data);
-    console.log('Generated feedback:', detailedFeedback);
-    displayDetailedFeedback(detailedFeedback, data.playerName);
+    try {
+        console.log('Generating feedback for player:', data.playerName, 'Data:', data);
+        const detailedFeedback = generatePlayerSpecificFeedback(data);
+        console.log('Generated feedback:', detailedFeedback);
+        displayDetailedFeedback(detailedFeedback, data.playerName);
+    } catch (error) {
+        console.error('Error generating/displaying feedback:', error);
+        // Fallback: show basic feedback
+        const detailedFeedbackSection = document.getElementById('detailedFeedback');
+        if (detailedFeedbackSection) {
+            detailedFeedbackSection.style.display = 'block';
+            const summaryEl = document.getElementById('shotSummary');
+            if (summaryEl) {
+                const avgCloseness = data.userCloseness.reduce((a, b) => a + b, 0) / data.userCloseness.length;
+                summaryEl.textContent = `Your shot analysis shows ${avgCloseness.toFixed(1)}% similarity to the benchmark.`;
+            }
+        }
+    }
     
     // Hide old feedback section
     const oldFeedbackSection = document.getElementById('oldFeedbackSection');
@@ -1111,7 +1125,7 @@ function populateFeedbackContent(feedback, playerName) {
     if (titleEl) {
         if (playerName && playerName !== 'custom' && feedback.name) {
             titleEl.textContent = `Comparing your shot to ${feedback.name}'s ${feedback.niche}`;
-        } else {
+    } else {
             titleEl.textContent = 'Detailed shot analysis';
         }
     }
@@ -1597,12 +1611,12 @@ async function handleGoogleSignIn() {
         if (window.saveUserEmail && window.firebaseAuth?.currentUser) {
             await window.saveUserEmail(userData.email, userData.firstName, userData.lastName);
         }
-        
-        // Move to player selection step
-        document.getElementById('step0').classList.remove('active');
-        document.getElementById('step0').style.display = 'none';
-        document.getElementById('step0_5').classList.add('active');
-        document.getElementById('step0_5').style.display = 'block';
+    
+    // Move to player selection step
+    document.getElementById('step0').classList.remove('active');
+    document.getElementById('step0').style.display = 'none';
+    document.getElementById('step0_5').classList.add('active');
+    document.getElementById('step0_5').style.display = 'block';
     } catch (error) {
         console.error('Error signing in with Google:', error);
         
@@ -1725,12 +1739,23 @@ function resetApp() {
     selectedPlayer = null;
     // Don't clear userInfo - keep user signed in
     
+    // Hide all steps first
+    document.querySelectorAll('.step').forEach(step => {
+        step.classList.remove('active');
+        step.style.display = 'none';
+    });
+    
     // Reset UI - go back to player selection if signed in, otherwise landing page
     const step0 = document.getElementById('step0');
     const step0_5 = document.getElementById('step0_5');
     
-    // Check if user is signed in (via Firebase auth or userInfo)
-    const isSignedIn = userInfo !== null || (window.firebaseAuth && window.firebaseAuth.currentUser);
+    // Check if user is signed in - check Firebase auth state synchronously
+    let isSignedIn = false;
+    if (window.firebaseAuth && window.firebaseAuth.currentUser) {
+        isSignedIn = true;
+    } else if (userInfo !== null) {
+        isSignedIn = true;
+    }
     
     if (isSignedIn) {
         // User is signed in - go to player selection
@@ -1744,17 +1769,17 @@ function resetApp() {
         }
     } else {
         // User is not signed in - go to landing page
-        if (step0) {
-            step0.classList.add('active');
-            step0.style.display = 'block';
-            const userInfoForm = document.getElementById('userInfoForm');
-            if (userInfoForm) {
-                userInfoForm.reset();
-            }
+    if (step0) {
+        step0.classList.add('active');
+        step0.style.display = 'block';
+        const userInfoForm = document.getElementById('userInfoForm');
+        if (userInfoForm) {
+            userInfoForm.reset();
         }
-        if (step0_5) {
-            step0_5.classList.remove('active');
-            step0_5.style.display = 'none';
+    }
+    if (step0_5) {
+        step0_5.classList.remove('active');
+        step0_5.style.display = 'none';
         }
     }
     
