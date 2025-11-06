@@ -1099,41 +1099,69 @@ function generateGenericFeedback(data) {
 }
 
 function displayDetailedFeedback(feedback, playerName) {
-    const detailedFeedbackSection = document.getElementById('detailedFeedback');
+    console.log('displayDetailedFeedback called with:', { feedback, playerName });
+    
+    // Try multiple times to find the element (in case DOM isn't ready)
+    let detailedFeedbackSection = document.getElementById('detailedFeedback');
+    
     if (!detailedFeedbackSection) {
-        console.error('detailedFeedback element not found');
-        // Try to find it after a short delay in case DOM isn't ready
+        console.error('detailedFeedback element not found, retrying...');
         setTimeout(() => {
-            const retry = document.getElementById('detailedFeedback');
-            if (retry) {
-                retry.style.display = 'block';
+            detailedFeedbackSection = document.getElementById('detailedFeedback');
+            if (detailedFeedbackSection) {
+                console.log('Found detailedFeedback element on retry');
+                detailedFeedbackSection.style.display = 'block';
                 populateFeedbackContent(feedback, playerName);
+            } else {
+                console.error('detailedFeedback element still not found after retry');
             }
-        }, 100);
+        }, 200);
         return;
     }
     
-    console.log('Displaying detailed feedback:', feedback, playerName);
+    console.log('Found detailedFeedback element, displaying...');
     detailedFeedbackSection.style.display = 'block';
+    detailedFeedbackSection.style.visibility = 'visible';
+    
+    // Force a reflow to ensure it's visible
+    detailedFeedbackSection.offsetHeight;
+    
     populateFeedbackContent(feedback, playerName);
 }
 
 function populateFeedbackContent(feedback, playerName) {
+    console.log('populateFeedbackContent called with:', { feedback, playerName });
+    
+    if (!feedback) {
+        console.error('No feedback data provided');
+        return;
+    }
     
     // Set player comparison title
     const titleEl = document.getElementById('playerComparisonTitle');
     if (titleEl) {
         if (playerName && playerName !== 'custom' && feedback.name) {
             titleEl.textContent = `Comparing your shot to ${feedback.name}'s ${feedback.niche}`;
-    } else {
+        } else {
             titleEl.textContent = 'Detailed shot analysis';
         }
+        console.log('Set title to:', titleEl.textContent);
+    } else {
+        console.error('playerComparisonTitle element not found');
     }
     
     // Display summary
     const summaryEl = document.getElementById('shotSummary');
-    if (summaryEl && feedback.summary) {
-        summaryEl.textContent = feedback.summary;
+    if (summaryEl) {
+        if (feedback.summary) {
+            summaryEl.textContent = feedback.summary;
+            console.log('Set summary:', feedback.summary);
+        } else {
+            summaryEl.textContent = 'Shot analysis complete.';
+            console.warn('No summary in feedback, using default');
+        }
+    } else {
+        console.error('shotSummary element not found');
     }
     
     // Display strengths
@@ -1141,6 +1169,7 @@ function populateFeedbackContent(feedback, playerName) {
     if (strengthsList) {
         strengthsList.innerHTML = '';
         if (feedback.strengths && feedback.strengths.length > 0) {
+            console.log('Displaying', feedback.strengths.length, 'strengths');
             feedback.strengths.forEach(strength => {
                 const item = document.createElement('div');
                 item.className = 'feedback-item strength-item';
@@ -1157,8 +1186,11 @@ function populateFeedbackContent(feedback, playerName) {
                 strengthsList.appendChild(item);
             });
         } else {
+            console.log('No strengths, showing placeholder');
             strengthsList.innerHTML = '<p class="no-feedback">Keep practicing to develop your strengths!</p>';
         }
+    } else {
+        console.error('strengthsList element not found');
     }
     
     // Display weaknesses
@@ -1166,6 +1198,7 @@ function populateFeedbackContent(feedback, playerName) {
     if (weaknessesList) {
         weaknessesList.innerHTML = '';
         if (feedback.weaknesses && feedback.weaknesses.length > 0) {
+            console.log('Displaying', feedback.weaknesses.length, 'weaknesses');
             feedback.weaknesses.forEach(weakness => {
                 const item = document.createElement('div');
                 item.className = 'feedback-item weakness-item';
@@ -1183,29 +1216,42 @@ function populateFeedbackContent(feedback, playerName) {
                 weaknessesList.appendChild(item);
             });
         } else {
+            console.log('No weaknesses, showing placeholder');
             weaknessesList.innerHTML = '<p class="no-feedback">Excellent! No major areas need improvement.</p>';
         }
+    } else {
+        console.error('weaknessesList element not found');
     }
     
     // Display metrics
     const metricsList = document.getElementById('metricsList');
-    if (metricsList && feedback.metrics) {
-        metricsList.innerHTML = '';
-        feedback.metrics.forEach(metric => {
-            const item = document.createElement('div');
-            item.className = 'metric-item';
-            item.innerHTML = `
-                <div class="metric-label">${metric.label}</div>
-                <div class="metric-value">${metric.value}</div>
-                <div class="metric-ideal">Ideal: ${metric.ideal}</div>
-                <div class="metric-bar">
-                    <div class="metric-bar-fill" style="width: ${Math.max(0, Math.min(100, metric.score))}%"></div>
-                </div>
-                <div class="metric-score">${metric.score.toFixed(0)}%</div>
-            `;
-            metricsList.appendChild(item);
-        });
+    if (metricsList) {
+        if (feedback.metrics && feedback.metrics.length > 0) {
+            console.log('Displaying', feedback.metrics.length, 'metrics');
+            metricsList.innerHTML = '';
+            feedback.metrics.forEach(metric => {
+                const item = document.createElement('div');
+                item.className = 'metric-item';
+                item.innerHTML = `
+                    <div class="metric-label">${metric.label}</div>
+                    <div class="metric-value">${metric.value}</div>
+                    <div class="metric-ideal">Ideal: ${metric.ideal}</div>
+                    <div class="metric-bar">
+                        <div class="metric-bar-fill" style="width: ${Math.max(0, Math.min(100, metric.score))}%"></div>
+                    </div>
+                    <div class="metric-score">${metric.score.toFixed(0)}%</div>
+                `;
+                metricsList.appendChild(item);
+            });
+        } else {
+            console.warn('No metrics in feedback');
+            metricsList.innerHTML = '<p class="no-feedback">Metrics not available.</p>';
+        }
+    } else {
+        console.error('metricsList element not found');
     }
+    
+    console.log('Finished populating feedback content');
 }
 
 // ====================== EMAIL FUNCTIONALITY (EmailJS) ======================
