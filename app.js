@@ -275,14 +275,12 @@ async function startBenchmarkRecording() {
         benchmarkStream = stream;
         video.srcObject = stream;
         
-        // Set canvas dimensions to match video
-        video.addEventListener('loadedmetadata', () => {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-        });
+        // Set canvas dimensions
+        canvas.width = 640;
+        canvas.height = 480;
         
-        // Ensure video plays
-        await video.play();
+        // Ensure video plays (non-blocking)
+        video.play().catch(err => console.error('Video play error:', err));
         
         benchmarkPoseData = [];
         
@@ -298,14 +296,6 @@ async function startBenchmarkRecording() {
         document.getElementById('benchmarkStatus').className = 'status recording';
         
         benchmarkPose.onResults((results) => {
-            // Update canvas dimensions to match video
-            const videoWidth = video.videoWidth || 640;
-            const videoHeight = video.videoHeight || 480;
-            if (canvas.width !== videoWidth || canvas.height !== videoHeight) {
-                canvas.width = videoWidth;
-                canvas.height = videoHeight;
-            }
-            
             ctx.save();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
@@ -440,6 +430,10 @@ function stopBenchmarkRecording() {
         document.getElementById('step1').style.display = 'none';
         document.getElementById('step2').classList.add('active');
         document.getElementById('step2').style.display = 'block';
+        
+        // Update back button visibility
+        const backBtn = document.getElementById('backToPlayers');
+        if (backBtn) backBtn.style.display = 'block';
     }
 }
 
@@ -456,14 +450,12 @@ async function startUserRecording() {
         userStream = stream;
         video.srcObject = stream;
         
-        // Set canvas dimensions to match video
-        video.addEventListener('loadedmetadata', () => {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-        });
+        // Set canvas dimensions
+        canvas.width = 640;
+        canvas.height = 480;
         
-        // Ensure video plays
-        await video.play();
+        // Ensure video plays (non-blocking)
+        video.play().catch(err => console.error('Video play error:', err));
         
         userPoseData = [];
         
@@ -479,14 +471,6 @@ async function startUserRecording() {
         document.getElementById('userStatus').className = 'status recording';
         
         userPose.onResults((results) => {
-            // Update canvas dimensions to match video
-            const videoWidth = video.videoWidth || 640;
-            const videoHeight = video.videoHeight || 480;
-            if (canvas.width !== videoWidth || canvas.height !== videoHeight) {
-                canvas.width = videoWidth;
-                canvas.height = videoHeight;
-            }
-            
             ctx.save();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
@@ -1111,6 +1095,65 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById('newComparison').addEventListener('click', resetApp);
     
+    // Back to players button
+    const backToPlayersBtn = document.getElementById('backToPlayers');
+    if (backToPlayersBtn) {
+        backToPlayersBtn.addEventListener('click', () => {
+            // Stop any active recordings
+            if (benchmarkCamera) {
+                benchmarkCamera.stop();
+                benchmarkCamera = null;
+            }
+            if (userCamera) {
+                userCamera.stop();
+                userCamera = null;
+            }
+            if (benchmarkStream) {
+                benchmarkStream.getTracks().forEach(track => track.stop());
+                benchmarkStream = null;
+            }
+            if (userStream) {
+                userStream.getTracks().forEach(track => track.stop());
+                userStream = null;
+            }
+            
+            // Hide all steps
+            document.querySelectorAll('.step').forEach(step => {
+                step.classList.remove('active');
+                step.style.display = 'none';
+            });
+            
+            // Show player selection
+            const step0_5 = document.getElementById('step0_5');
+            if (step0_5) {
+                step0_5.classList.add('active');
+                step0_5.style.display = 'block';
+            }
+            
+            // Hide back button
+            backToPlayersBtn.style.display = 'none';
+        });
+    }
+    
+    // Show/hide back button based on current step
+    function updateBackButton() {
+        const step1 = document.getElementById('step1');
+        const step2 = document.getElementById('step2');
+        const backBtn = document.getElementById('backToPlayers');
+        if (backBtn) {
+            const isOnRecordingPage = (step1 && step1.style.display !== 'none') || 
+                                     (step2 && step2.style.display !== 'none');
+            backBtn.style.display = isOnRecordingPage ? 'block' : 'none';
+        }
+    }
+    
+    // Monitor step changes
+    const observer = new MutationObserver(updateBackButton);
+    document.querySelectorAll('.step').forEach(step => {
+        observer.observe(step, { attributes: true, attributeFilter: ['style', 'class'] });
+    });
+    updateBackButton(); // Initial check
+    
     // Initialize professional player benchmarks
     initializeProPlayerBenchmarks();
     
@@ -1132,6 +1175,9 @@ document.addEventListener('DOMContentLoaded', () => {
 // ====================== PLAYER SELECTION ======================
 
 function selectPlayer(player) {
+    // Show back button when navigating to recording pages
+    const backBtn = document.getElementById('backToPlayers');
+    if (backBtn) backBtn.style.display = 'block';
     selectedPlayer = player;
     
     // Hide player selection (step0_5)
