@@ -905,11 +905,42 @@ document.addEventListener('DOMContentLoaded', () => {
         googleSignInBtn.addEventListener('click', handleGoogleSignIn);
     }
     
+    // Profile dropdown toggle
+    const profileButton = document.getElementById('profileButton');
+    const profileMenu = document.getElementById('profileMenu');
+    if (profileButton) {
+        profileButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            profileMenu.style.display = profileMenu.style.display === 'none' ? 'block' : 'none';
+        });
+    }
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (profileMenu && !profileButton.contains(e.target) && !profileMenu.contains(e.target)) {
+            profileMenu.style.display = 'none';
+        }
+    });
+    
+    // Logout button
+    const logoutButton = document.getElementById('logoutButton');
+    if (logoutButton) {
+        logoutButton.addEventListener('click', handleLogout);
+        logoutButton.addEventListener('mouseenter', () => {
+            logoutButton.style.background = '#f5f5f5';
+        });
+        logoutButton.addEventListener('mouseleave', () => {
+            logoutButton.style.background = 'none';
+        });
+    }
+    
     // Check if user is already signed in
     if (window.onAuthStateChangedHandler && window.firebaseAuth) {
         window.onAuthStateChangedHandler(window.firebaseAuth, (user) => {
             if (user) {
-                // User is signed in, automatically proceed
+                // User is signed in, update profile and show it
+                updateProfileUI(user);
+                
                 const firstName = user.displayName?.split(' ')[0] || '';
                 const lastName = user.displayName?.split(' ').slice(1).join(' ') || '';
                 const email = user.email || '';
@@ -922,6 +953,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('step0').style.display = 'none';
                 document.getElementById('step0_5').classList.add('active');
                 document.getElementById('step0_5').style.display = 'block';
+            } else {
+                // User is signed out, hide profile
+                hideProfileUI();
             }
         });
     }
@@ -1024,6 +1058,11 @@ async function handleGoogleSignIn() {
         // Store user info
         userInfo = userData;
         
+        // Update profile UI
+        if (window.firebaseAuth?.currentUser) {
+            updateProfileUI(window.firebaseAuth.currentUser);
+        }
+        
         // Save to Firestore
         if (window.saveUserEmail && window.firebaseAuth?.currentUser) {
             await window.saveUserEmail(userData.email, userData.firstName, userData.lastName);
@@ -1057,6 +1096,75 @@ async function handleGoogleSignIn() {
     }
 }
 
+// ====================== PROFILE MANAGEMENT ======================
+
+function updateProfileUI(user) {
+    const profileDropdown = document.getElementById('profileDropdown');
+    const profileInitials = document.getElementById('profileInitials');
+    const profileName = document.getElementById('profileName');
+    const menuUserName = document.getElementById('menuUserName');
+    const menuUserEmail = document.getElementById('menuUserEmail');
+    
+    if (!profileDropdown) return;
+    
+    // Show profile dropdown
+    profileDropdown.style.display = 'block';
+    
+    // Get user name
+    const displayName = user.displayName || 'User';
+    const firstName = displayName.split(' ')[0] || 'User';
+    const lastName = displayName.split(' ').slice(1).join(' ') || '';
+    
+    // Set initials
+    const initials = (firstName[0] || '') + (lastName[0] || '') || 'U';
+    if (profileInitials) {
+        profileInitials.textContent = initials.toUpperCase();
+    }
+    
+    // Set name
+    if (profileName) {
+        profileName.textContent = displayName;
+    }
+    
+    // Set menu info
+    if (menuUserName) {
+        menuUserName.textContent = displayName;
+    }
+    if (menuUserEmail) {
+        menuUserEmail.textContent = user.email || '';
+    }
+}
+
+function hideProfileUI() {
+    const profileDropdown = document.getElementById('profileDropdown');
+    if (profileDropdown) {
+        profileDropdown.style.display = 'none';
+    }
+}
+
+async function handleLogout() {
+    try {
+        if (window.signOutUser) {
+            await window.signOutUser();
+        }
+        
+        // Clear user info
+        userInfo = null;
+        selectedPlayer = null;
+        
+        // Hide profile
+        hideProfileUI();
+        
+        // Reset app and go back to step 0
+        resetApp();
+        
+        // Show success message
+        alert('Signed out successfully');
+    } catch (error) {
+        console.error('Error signing out:', error);
+        alert('Failed to sign out. Please try again.');
+    }
+}
 
 function retakeBenchmark() {
     benchmarkPoseData = [];
