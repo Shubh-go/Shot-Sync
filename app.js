@@ -951,16 +951,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Store user info
                 userInfo = { firstName, lastName, email };
                 
-                // Only auto-advance if we're currently on step 0 (landing page)
-                // Don't force navigation if user is on a different step
-                const currentStep = document.querySelector('.step.active');
-                if (currentStep && currentStep.id === 'step0') {
-                    // Automatically move to player selection if user is already signed in
-                    document.getElementById('step0').classList.remove('active');
-                    document.getElementById('step0').style.display = 'none';
-                    document.getElementById('step0_5').classList.add('active');
-                    document.getElementById('step0_5').style.display = 'block';
-                }
+                // Don't auto-advance - let user see landing page first
+                // They can click "Sign in with Google" to proceed
+                // Only show profile, don't change the current step
             } else {
                 // User is signed out, hide profile and show landing page
                 hideProfileUI();
