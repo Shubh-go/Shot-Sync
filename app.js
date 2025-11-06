@@ -1040,7 +1040,18 @@ async function handleGoogleSignIn() {
         document.getElementById('step0_5').style.display = 'block';
     } catch (error) {
         console.error('Error signing in with Google:', error);
-        alert('Failed to sign in with Google. Please try again or use the form below.');
+        
+        // Provide more specific error messages
+        let errorMessage = 'Failed to sign in with Google. ';
+        if (error.code === 'auth/operation-not-allowed') {
+            errorMessage += 'Google Sign-In is not enabled in Firebase. Please enable it in Firebase Console.';
+        } else if (error.code === 'auth/unauthorized-domain') {
+            errorMessage += 'This domain is not authorized. Please add shubh-go.github.io to Firebase authorized domains.';
+        } else {
+            errorMessage += 'Please try again or use the form below.';
+        }
+        
+        alert(errorMessage);
         
         const googleSignInBtn = document.getElementById('googleSignInBtn');
         if (googleSignInBtn) {
