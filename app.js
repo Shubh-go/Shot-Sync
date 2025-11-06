@@ -860,6 +860,25 @@ async function sendEmailAutomatically(data) {
         // Send email via EmailJS using send method with HTML content
         await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams);
         
+        // Save analysis to Firestore
+        if (window.saveAnalysis && window.firebaseAuth?.currentUser) {
+            try {
+                const userId = window.firebaseAuth.currentUser.uid;
+                await window.saveAnalysis(userId, {
+                    firstName: userInfo.firstName,
+                    lastName: userInfo.lastName,
+                    email: userInfo.email,
+                    overallScore: avgCloseness.toFixed(1),
+                    selectedPlayer: selectedPlayer || 'custom',
+                    feedback: feedbackText,
+                    timestamp: new Date().toISOString()
+                });
+            } catch (error) {
+                console.error('Error saving analysis:', error);
+                // Continue anyway - analysis saving is optional
+            }
+        }
+        
         // Show success message
         const emailSuccessSection = document.getElementById('emailSuccessSection');
         if (emailSuccessSection) {
@@ -880,10 +899,35 @@ async function sendEmailAutomatically(data) {
 document.addEventListener('DOMContentLoaded', () => {
     initializePose();
     
+    // Google Sign-In button handler
+    const googleSignInBtn = document.getElementById('googleSignInBtn');
+    if (googleSignInBtn && window.signInWithGoogle) {
+        googleSignInBtn.addEventListener('click', handleGoogleSignIn);
+    }
+    
     // User info form handler
     const userInfoForm = document.getElementById('userInfoForm');
     if (userInfoForm) {
         userInfoForm.addEventListener('submit', handleUserInfoSubmission);
+    }
+    
+    // Check if user is already signed in
+    if (window.onAuthStateChangedHandler && window.firebaseAuth) {
+        window.onAuthStateChangedHandler(window.firebaseAuth, (user) => {
+            if (user) {
+                // User is signed in, pre-fill form
+                const firstName = user.displayName?.split(' ')[0] || '';
+                const lastName = user.displayName?.split(' ').slice(1).join(' ') || '';
+                const email = user.email || '';
+                
+                document.getElementById('firstName').value = firstName;
+                document.getElementById('lastName').value = lastName;
+                document.getElementById('email').value = email;
+                
+                // Store user info
+                userInfo = { firstName, lastName, email };
+            }
+        });
     }
     
     document.getElementById('startBenchmark').addEventListener('click', startBenchmarkRecording);
@@ -971,7 +1015,42 @@ function selectPlayer(player) {
 
 // ====================== USER INFO COLLECTION ======================
 
-function handleUserInfoSubmission(e) {
+async function handleGoogleSignIn() {
+    try {
+        const googleSignInBtn = document.getElementById('googleSignInBtn');
+        if (googleSignInBtn) {
+            googleSignInBtn.disabled = true;
+            googleSignInBtn.textContent = 'Signing in...';
+        }
+        
+        const userData = await window.signInWithGoogle();
+        
+        // Store user info
+        userInfo = userData;
+        
+        // Save to Firestore
+        if (window.saveUserEmail && window.firebaseAuth?.currentUser) {
+            await window.saveUserEmail(userData.email, userData.firstName, userData.lastName);
+        }
+        
+        // Move to player selection step
+        document.getElementById('step0').classList.remove('active');
+        document.getElementById('step0').style.display = 'none';
+        document.getElementById('step0_5').classList.add('active');
+        document.getElementById('step0_5').style.display = 'block';
+    } catch (error) {
+        console.error('Error signing in with Google:', error);
+        alert('Failed to sign in with Google. Please try again or use the form below.');
+        
+        const googleSignInBtn = document.getElementById('googleSignInBtn');
+        if (googleSignInBtn) {
+            googleSignInBtn.disabled = false;
+            googleSignInBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.712c-.18-.54-.282-1.117-.282-1.712 0-.595.102-1.172.282-1.712V4.956H.957C.348 6.175 0 7.55 0 9s.348 2.825.957 4.044l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.956L3.964 7.288C4.672 5.163 6.656 3.58 9 3.58z"/></svg> Sign in with Google';
+        }
+    }
+}
+
+async function handleUserInfoSubmission(e) {
     e.preventDefault();
     
     const firstName = document.getElementById('firstName').value.trim();
@@ -985,6 +1064,16 @@ function handleUserInfoSubmission(e) {
     
     // Store user info
     userInfo = { firstName, lastName, email };
+    
+    // Save to Firestore if user is authenticated
+    if (window.saveUserEmail && window.firebaseAuth?.currentUser) {
+        try {
+            await window.saveUserEmail(email, firstName, lastName);
+        } catch (error) {
+            console.error('Error saving email:', error);
+            // Continue anyway - email saving is optional
+        }
+    }
     
     // Move to player selection step
     document.getElementById('step0').classList.remove('active');
