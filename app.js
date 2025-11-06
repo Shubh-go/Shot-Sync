@@ -854,9 +854,9 @@ function generatePlayerSpecificFeedback(data) {
     const avgCloseness = data.userCloseness.reduce((a, b) => a + b, 0) / data.userCloseness.length;
     
     // Extract angle data from userPoseData (use global variable)
-    let avgElbowAngle = 145; // Default values if data not available
-    let avgWristAngle = 90;
-    let avgArmAngle = 50;
+    let avgElbowAngle = 0;
+    let avgWristAngle = 0;
+    let avgArmAngle = 0;
     let elbowCount = 0;
     let wristCount = 0;
     let armCount = 0;
@@ -881,12 +881,14 @@ function generatePlayerSpecificFeedback(data) {
         });
         
         if (elbowCount > 0) avgElbowAngle /= elbowCount;
-        else avgElbowAngle = 145; // Reset to default if no data
         if (wristCount > 0) avgWristAngle /= wristCount;
-        else avgWristAngle = 90; // Reset to default if no data
         if (armCount > 0) avgArmAngle /= armCount;
-        else avgArmAngle = 50; // Reset to default if no data
     }
+    
+    // Use default values if no data available
+    if (elbowCount === 0) avgElbowAngle = 145;
+    if (wristCount === 0) avgWristAngle = 90;
+    if (armCount === 0) avgArmAngle = 50;
     
     const playerFeedback = {
         'curry': {
