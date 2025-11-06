@@ -905,27 +905,23 @@ document.addEventListener('DOMContentLoaded', () => {
         googleSignInBtn.addEventListener('click', handleGoogleSignIn);
     }
     
-    // User info form handler
-    const userInfoForm = document.getElementById('userInfoForm');
-    if (userInfoForm) {
-        userInfoForm.addEventListener('submit', handleUserInfoSubmission);
-    }
-    
     // Check if user is already signed in
     if (window.onAuthStateChangedHandler && window.firebaseAuth) {
         window.onAuthStateChangedHandler(window.firebaseAuth, (user) => {
             if (user) {
-                // User is signed in, pre-fill form
+                // User is signed in, automatically proceed
                 const firstName = user.displayName?.split(' ')[0] || '';
                 const lastName = user.displayName?.split(' ').slice(1).join(' ') || '';
                 const email = user.email || '';
                 
-                document.getElementById('firstName').value = firstName;
-                document.getElementById('lastName').value = lastName;
-                document.getElementById('email').value = email;
-                
                 // Store user info
                 userInfo = { firstName, lastName, email };
+                
+                // Automatically move to player selection if user is already signed in
+                document.getElementById('step0').classList.remove('active');
+                document.getElementById('step0').style.display = 'none';
+                document.getElementById('step0_5').classList.add('active');
+                document.getElementById('step0_5').style.display = 'block';
             }
         });
     }
@@ -1061,37 +1057,6 @@ async function handleGoogleSignIn() {
     }
 }
 
-async function handleUserInfoSubmission(e) {
-    e.preventDefault();
-    
-    const firstName = document.getElementById('firstName').value.trim();
-    const lastName = document.getElementById('lastName').value.trim();
-    const email = document.getElementById('email').value.trim();
-    
-    if (!firstName || !lastName || !email) {
-        alert('Please fill in all fields.');
-        return;
-    }
-    
-    // Store user info
-    userInfo = { firstName, lastName, email };
-    
-    // Save to Firestore if user is authenticated
-    if (window.saveUserEmail && window.firebaseAuth?.currentUser) {
-        try {
-            await window.saveUserEmail(email, firstName, lastName);
-        } catch (error) {
-            console.error('Error saving email:', error);
-            // Continue anyway - email saving is optional
-        }
-    }
-    
-    // Move to player selection step
-    document.getElementById('step0').classList.remove('active');
-    document.getElementById('step0').style.display = 'none';
-    document.getElementById('step0_5').classList.add('active');
-    document.getElementById('step0_5').style.display = 'block';
-}
 
 function retakeBenchmark() {
     benchmarkPoseData = [];
