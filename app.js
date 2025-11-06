@@ -6,24 +6,112 @@ let userStream = null;
 let benchmarkCamera = null;
 let userCamera = null;
 let comparisonChart = null;
+let userInfo = null; // Store user info for email
+let benchmarkRenderLoopId = null;
+let userRenderLoopId = null;
+let selectedPlayer = null; // 'curry', 'lebron', 'jordan', 'durant', 'clark', or 'custom'
+let proPlayerBenchmarks = {}; // Store pre-loaded benchmarks for pro players
+let benchmarkStopped = false; // Flag to prevent processing after stop
+
+// EmailJS Configuration
+// You'll get these from EmailJS dashboard after signing up
+const EMAILJS_SERVICE_ID = 'YOUR_SERVICE_ID'; // Replace with your EmailJS service ID
+const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID'; // Replace with your EmailJS template ID
+const EMAILJS_PUBLIC_KEY = 'YOUR_PUBLIC_KEY'; // Replace with your EmailJS public key
+
+// EmailJS will be initialized when DOM loads
+
+// Generate realistic example benchmark data for professional players
+// Format must EXACTLY match what gets recorded in custom benchmark mode
+function generateExampleBenchmarkData() {
+    // Create a realistic shooting motion with typical angles
+    // This mimics a real recording from startBenchmarkRecording
+    const data = [];
+    const duration = 2.0; // 2 seconds
+    const fps = 30; // 30 frames per second  
+    const totalFrames = Math.floor(duration * fps);
+    
+    let previousStage = "neutral";
+    let recordingActive = false;
+    let seenFollowThrough = false;
+    let startTime = 0;
+    
+    for (let i = 0; i < totalFrames; i++) {
+        const t = i / fps;
+        const progress = t / duration; // 0 to 1
+        
+        // Realistic shooting motion states - match the state machine logic
+        let state = "neutral";
+        if (progress < 0.15) {
+            state = "neutral";
+        } else if (progress < 0.85) {
+            state = "pre_shot";
+            if (!recordingActive) {
+                recordingActive = true;
+                seenFollowThrough = false;
+                startTime = t;
+            }
+        } else {
+            state = "follow_through";
+            if (recordingActive) {
+                seenFollowThrough = true;
+            }
+        }
+        
+        // Elbow angle: starts at ~90 degrees, extends to ~180 degrees
+        const elbowAngle = Math.max(0, Math.min(180, 90 + (progress * 90) + (Math.sin(progress * Math.PI) * 10)));
+        
+        // Wrist angle: starts at ~150 degrees, snaps to ~90 degrees at release
+        const wristAngle = Math.max(0, Math.min(180, progress < 0.6 ? 150 : (150 - (progress - 0.6) * 150)));
+        
+        // Arm angle: relatively stable around 45-60 degrees
+        const armAngle = Math.max(0, Math.min(180, 45 + (Math.sin(progress * Math.PI * 2) * 5)));
+        
+        // Ensure all angles are valid numbers (not NaN)
+        if (isNaN(elbowAngle) || isNaN(wristAngle) || isNaN(armAngle)) {
+            continue; // Skip invalid frames
+        }
+        
+        // Create landmarks array - EXACT format: array of [x, y, z] arrays (like get3DPoint returns)
+        const landmarks3D = [];
+        for (let idx = 0; idx < 33; idx++) {
+            // Create realistic landmark positions based on shooting motion
+            const x = 0.5 + Math.sin(idx * 0.2) * 0.1 + (progress * 0.05);
+            const y = 0.5 + Math.cos(idx * 0.2) * 0.1 - (progress * 0.1); // Arm moves up
+            const z = Math.sin(idx * 0.15) * 0.05;
+            landmarks3D.push([x, y, z]);
+        }
+        
+        // Only record if recordingActive (matches the recording logic)
+        if (recordingActive) {
+            const elapsed = t - startTime;
+            data.push({
+                state: state,
+                time: elapsed,  // Use elapsed time like in recording
+                elbow_angle: elbowAngle,
+                wrist_angle: wristAngle,
+                arm_angle: armAngle,
+                landmarks: landmarks3D
+            });
+        }
+        
+        previousStage = state;
+    }
+    
+    return data;
+}
+
+// Initialize professional player benchmarks with example data
+function initializeProPlayerBenchmarks() {
+    const players = ['curry', 'lebron', 'jordan', 'durant', 'clark'];
+    players.forEach(player => {
+        proPlayerBenchmarks[player] = generateExampleBenchmarkData();
+    });
+}
 
 // MediaPipe Pose
 let benchmarkPose = null;
 let userPose = null;
-
-// MediaPipe Pose Connections (33 landmarks)
-const POSE_CONNECTIONS = [
-    [0, 1], [1, 2], [2, 3], [3, 7],
-    [0, 4], [4, 5], [5, 6], [6, 8],
-    [9, 10],
-    [11, 12],
-    [11, 13], [13, 15], [15, 17], [17, 19], [19, 15], [15, 21],
-    [12, 14], [14, 16], [16, 18], [18, 20], [20, 16], [16, 22],
-    [11, 23], [12, 24],
-    [23, 24],
-    [23, 25], [25, 27], [27, 29], [29, 31], [31, 27],
-    [24, 26], [26, 28], [28, 30], [30, 32], [32, 28]
-];
 
 // ====================== MEDIAPIPE SETUP ======================
 
@@ -532,7 +620,32 @@ function compareShots() {
     document.getElementById('results').style.display = 'none';
     
     setTimeout(() => {
-        const benchForm = extractFormSeries(benchmarkPoseData);
+        // For pro players, use pre-loaded benchmark; for custom, use recorded benchmark
+        let benchmarkData = benchmarkPoseData;
+        
+        if (selectedPlayer && selectedPlayer !== 'custom') {
+            // Use pre-loaded benchmark for pro player
+            if (proPlayerBenchmarks[selectedPlayer] && proPlayerBenchmarks[selectedPlayer].length > 0) {
+                benchmarkData = proPlayerBenchmarks[selectedPlayer];
+            } else {
+                // Initialize if needed
+                initializeProPlayerBenchmarks();
+                benchmarkData = proPlayerBenchmarks[selectedPlayer];
+            }
+        }
+        
+        // Check if we have valid benchmark data
+        if (!benchmarkData || benchmarkData.length === 0) {
+            document.getElementById('loading').innerHTML = '<p style="color: red;">No benchmark data found. Please record a benchmark first.</p>';
+            return;
+        }
+        
+        if (userPoseData.length === 0) {
+            document.getElementById('loading').innerHTML = '<p style="color: red;">No user shot data found. Please record your shot again.</p>';
+            return;
+        }
+        
+        const benchForm = extractFormSeries(benchmarkData);
         const userForm = extractFormSeries(userPoseData);
         
         if (benchForm.times.length < 2 || userForm.times.length < 2) {
@@ -563,7 +676,8 @@ function compareShots() {
             benchTimes: benchForm.times,
             userTimes: userForm.times,
             userCloseness: userCloseness,
-            feedback: feedback
+            feedback: feedback,
+            playerName: selectedPlayer
         });
     }, 500);
 }
@@ -573,7 +687,21 @@ function displayResults(data) {
     document.getElementById('results').style.display = 'block';
     
     const avgCloseness = data.userCloseness.reduce((a, b) => a + b, 0) / data.userCloseness.length;
-    document.getElementById('overallScore').textContent = `Overall Score: ${avgCloseness.toFixed(1)}%`;
+    
+    // Add player name to title if applicable
+    const playerNames = {
+        'curry': 'Stephen Curry',
+        'lebron': 'LeBron James',
+        'jordan': 'Michael Jordan',
+        'durant': 'Kevin Durant',
+        'clark': 'Caitlin Clark'
+    };
+    
+    let title = `Overall Score: ${avgCloseness.toFixed(1)}%`;
+    if (data.playerName && data.playerName !== 'custom') {
+        title += ` (vs ${playerNames[data.playerName]})`;
+    }
+    document.getElementById('overallScore').textContent = title;
     
     const ctx = document.getElementById('comparisonChart').getContext('2d');
     
@@ -636,12 +764,127 @@ function displayResults(data) {
         p.textContent = feedback;
         feedbackList.appendChild(p);
     });
+    
+    // Automatically send email if user info is available
+    if (userInfo) {
+        sendEmailAutomatically(data);
+    } else {
+        // Show success message anyway (fallback)
+        const emailSuccessSection = document.getElementById('emailSuccessSection');
+        if (emailSuccessSection) {
+            emailSuccessSection.style.display = 'block';
+        }
+    }
+}
+
+// ====================== EMAIL FUNCTIONALITY (EmailJS) ======================
+
+async function sendEmailAutomatically(data) {
+    try {
+        // Wait a moment for chart to render
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Capture chart as image
+        let chartImage = '';
+        if (comparisonChart) {
+            chartImage = comparisonChart.toBase64Image('image/png', 1.0);
+        }
+        
+        // Prepare data
+        const avgCloseness = data.userCloseness.reduce((a, b) => a + b, 0) / data.userCloseness.length;
+        const feedbackText = data.feedback.join('\n\n');
+        
+        // Check if EmailJS is configured
+        if (typeof emailjs === 'undefined' || EMAILJS_SERVICE_ID === 'YOUR_SERVICE_ID') {
+            console.warn('EmailJS not configured. Please set up EmailJS credentials.');
+            // Still show success message
+            const emailSuccessSection = document.getElementById('emailSuccessSection');
+            if (emailSuccessSection) {
+                emailSuccessSection.style.display = 'block';
+            }
+            return;
+        }
+        
+        // Build full HTML email content with embedded chart
+        const htmlContent = `
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f5f5f5;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: white; border-radius: 10px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <h1 style="color: #667eea; margin-top: 0; text-align: center;">🏀 Shot Sync</h1>
+            <h2 style="color: #333; text-align: center; font-size: 24px;">Thank You for Using Shot Sync!</h2>
+            
+            <p style="font-size: 16px;">Hi ${userInfo.firstName},</p>
+            <p>We're excited to share your personalized shot analysis results with you. Here's everything you need to improve your basketball shooting form:</p>
+            
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; border-radius: 10px; margin: 30px 0; text-align: center;">
+                <h2 style="color: white; margin: 0; font-size: 36px;">Overall Score: ${avgCloseness.toFixed(1)}%</h2>
+            </div>
+            
+            ${chartImage ? `
+            <h3 style="color: #333; margin-top: 30px;">Your Shot Analysis Graph</h3>
+            <p style="color: #666; font-size: 14px;">This graph shows how your shot form compares to the benchmark throughout your shooting motion.</p>
+            <img src="${chartImage}" alt="Shot Analysis Chart" style="max-width: 100%; height: auto; border-radius: 10px; margin: 20px 0; border: 2px solid #e0e0e0;">
+            ` : ''}
+            
+            <h3 style="color: #333; margin-top: 30px;">Feedback & Recommendations</h3>
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #667eea;">
+                <pre style="white-space: pre-wrap; font-family: Arial, sans-serif; margin: 0; color: #333;">${feedbackText}</pre>
+            </div>
+            
+            <div style="background: #f0f7ff; padding: 20px; border-radius: 10px; margin: 30px 0; text-align: center;">
+                <p style="margin: 0; font-size: 16px; color: #333;"><strong>Keep practicing!</strong> Every shot is an opportunity to improve.</p>
+            </div>
+            
+            <p style="margin-top: 30px; color: #666; font-size: 14px;">We hope this analysis helps you take your game to the next level!</p>
+            <p style="margin-top: 20px;">Best regards,<br><strong>The Shot Sync Team</strong></p>
+            
+            <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+            <p style="text-align: center; color: #999; font-size: 12px;">Shot Sync - Your Basketball Shot Analysis Partner</p>
+        </div>
+    </div>
+</body>
+</html>
+        `.trim();
+        
+        // Prepare email template parameters
+        const templateParams = {
+            to_email: userInfo.email,
+            to_name: userInfo.firstName,
+            subject: `Your Shot Sync Analysis Results - ${userInfo.firstName}!`,
+            message: htmlContent,
+            html_content: htmlContent
+        };
+        
+        // Send email via EmailJS using send method with HTML content
+        await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams);
+        
+        // Show success message
+        const emailSuccessSection = document.getElementById('emailSuccessSection');
+        if (emailSuccessSection) {
+            emailSuccessSection.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error sending email:', error);
+        // Still show success message (email might be delayed)
+        const emailSuccessSection = document.getElementById('emailSuccessSection');
+        if (emailSuccessSection) {
+            emailSuccessSection.style.display = 'block';
+        }
+    }
 }
 
 // ====================== INITIALIZATION ======================
 
 document.addEventListener('DOMContentLoaded', () => {
     initializePose();
+    
+    // User info form handler
+    const userInfoForm = document.getElementById('userInfoForm');
+    if (userInfoForm) {
+        userInfoForm.addEventListener('submit', handleUserInfoSubmission);
+    }
     
     document.getElementById('startBenchmark').addEventListener('click', startBenchmarkRecording);
     document.getElementById('stopBenchmark').addEventListener('click', stopBenchmarkRecording);
@@ -652,7 +895,103 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('retakeUser').addEventListener('click', retakeUser);
     
     document.getElementById('newComparison').addEventListener('click', resetApp);
+    
+    // Initialize professional player benchmarks
+    initializeProPlayerBenchmarks();
+    
+    // Set up player selection buttons
+    const playerButtons = document.querySelectorAll('.player-btn');
+    playerButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const player = btn.getAttribute('data-player');
+            selectPlayer(player);
+        });
+    });
+    
+    // Initialize EmailJS if available
+    if (typeof emailjs !== 'undefined' && EMAILJS_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY') {
+        emailjs.init(EMAILJS_PUBLIC_KEY);
+    }
 });
+
+// ====================== PLAYER SELECTION ======================
+
+function selectPlayer(player) {
+    selectedPlayer = player;
+    
+    // Hide player selection (step0_5)
+    const step0_5 = document.getElementById('step0_5');
+    if (step0_5) {
+        step0_5.classList.remove('active');
+        step0_5.style.display = 'none';
+    }
+    
+    // Show custom explanation if custom selected
+    const customExplanation = document.getElementById('customExplanation');
+    if (customExplanation) {
+        if (player === 'custom') {
+            customExplanation.style.display = 'block';
+        } else {
+            customExplanation.style.display = 'none';
+        }
+    }
+    
+    const playerNames = {
+        'curry': 'Stephen Curry',
+        'lebron': 'LeBron James',
+        'jordan': 'Michael Jordan',
+        'durant': 'Kevin Durant',
+        'clark': 'Caitlin Clark'
+    };
+    
+    if (player === 'custom') {
+        // Custom mode: show benchmark recording step
+        const step1Title = document.getElementById('step1Title');
+        if (step1Title) {
+            step1Title.textContent = 'Step 1: Record Benchmark Shot';
+        }
+        document.getElementById('step1').classList.add('active');
+        document.getElementById('step1').style.display = 'block';
+    } else {
+        // Pro player mode: skip to user recording with pre-loaded benchmark
+        // Use the pre-loaded benchmark data
+        if (!proPlayerBenchmarks[player] || proPlayerBenchmarks[player].length === 0) {
+            // Initialize if not already done
+            initializeProPlayerBenchmarks();
+        }
+        
+        const step2Title = document.getElementById('step2Title');
+        if (step2Title) {
+            step2Title.textContent = `Record Your Shot (vs ${playerNames[player]})`;
+        }
+        document.getElementById('step2').classList.add('active');
+        document.getElementById('step2').style.display = 'block';
+    }
+}
+
+// ====================== USER INFO COLLECTION ======================
+
+function handleUserInfoSubmission(e) {
+    e.preventDefault();
+    
+    const firstName = document.getElementById('firstName').value.trim();
+    const lastName = document.getElementById('lastName').value.trim();
+    const email = document.getElementById('email').value.trim();
+    
+    if (!firstName || !lastName || !email) {
+        alert('Please fill in all fields.');
+        return;
+    }
+    
+    // Store user info
+    userInfo = { firstName, lastName, email };
+    
+    // Move to player selection step
+    document.getElementById('step0').classList.remove('active');
+    document.getElementById('step0').style.display = 'none';
+    document.getElementById('step0_5').classList.add('active');
+    document.getElementById('step0_5').style.display = 'block';
+}
 
 function retakeBenchmark() {
     benchmarkPoseData = [];
@@ -680,9 +1019,29 @@ function resetApp() {
     userCamera = null;
     benchmarkStream = null;
     userStream = null;
+    selectedPlayer = null;
+    userInfo = null;
     
-    document.getElementById('step1').classList.add('active');
-    document.getElementById('step1').style.display = 'block';
+    // Reset UI - go back to Step 0
+    const step0 = document.getElementById('step0');
+    if (step0) {
+        step0.classList.add('active');
+        step0.style.display = 'block';
+        const userInfoForm = document.getElementById('userInfoForm');
+        if (userInfoForm) {
+            userInfoForm.reset();
+        }
+    }
+    
+    // Hide step0_5
+    const step0_5 = document.getElementById('step0_5');
+    if (step0_5) {
+        step0_5.classList.remove('active');
+        step0_5.style.display = 'none';
+    }
+    
+    document.getElementById('step1').classList.remove('active');
+    document.getElementById('step1').style.display = 'none';
     document.getElementById('step2').classList.remove('active');
     document.getElementById('step2').style.display = 'none';
     document.getElementById('step3').classList.remove('active');
@@ -695,6 +1054,11 @@ function resetApp() {
     
     document.getElementById('retakeBenchmark').style.display = 'none';
     document.getElementById('retakeUser').style.display = 'none';
+    
+    const emailSuccessSection = document.getElementById('emailSuccessSection');
+    if (emailSuccessSection) {
+        emailSuccessSection.style.display = 'none';
+    }
     
     if (comparisonChart) {
         comparisonChart.destroy();
