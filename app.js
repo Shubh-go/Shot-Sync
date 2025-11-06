@@ -950,19 +950,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check if user is already signed in
     if (window.onAuthStateChangedHandler && window.firebaseAuth) {
         window.onAuthStateChangedHandler(window.firebaseAuth, (user) => {
-            // Always ensure landing page is shown first, regardless of auth state
             const step0 = document.getElementById('step0');
             const step0_5 = document.getElementById('step0_5');
-            if (step0 && step0_5) {
-                // Only show landing page if we're not already on a later step
-                const currentActiveStep = document.querySelector('.step.active');
-                if (!currentActiveStep || currentActiveStep.id === 'step0' || currentActiveStep.id === 'step0_5') {
-                    step0.classList.add('active');
-                    step0.style.display = 'block';
-                    step0_5.classList.remove('active');
-                    step0_5.style.display = 'none';
-                }
-            }
             
             if (user) {
                 // User is signed in, update profile and show it
@@ -974,9 +963,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Store user info
                 userInfo = { firstName, lastName, email };
+                
+                // Hide sign-in button since user is already signed in
+                const signInSection = document.getElementById('signInSection');
+                if (signInSection) {
+                    signInSection.style.display = 'none';
+                }
+                
+                // Auto-advance to player selection if user is already signed in
+                if (step0 && step0_5) {
+                    const currentActiveStep = document.querySelector('.step.active');
+                    // Only auto-advance if we're on the landing page
+                    if (currentActiveStep && currentActiveStep.id === 'step0') {
+                        step0.classList.remove('active');
+                        step0.style.display = 'none';
+                        step0_5.classList.add('active');
+                        step0_5.style.display = 'block';
+                    }
+                }
             } else {
-                // User is signed out, hide profile
+                // User is signed out, hide profile and show landing page
                 hideProfileUI();
+                
+                // Show sign-in button
+                const signInSection = document.getElementById('signInSection');
+                if (signInSection) {
+                    signInSection.style.display = 'block';
+                }
+                
+                if (step0 && step0_5) {
+                    step0.classList.add('active');
+                    step0.style.display = 'block';
+                    step0_5.classList.remove('active');
+                    step0_5.style.display = 'none';
+                }
             }
         });
     } else {
