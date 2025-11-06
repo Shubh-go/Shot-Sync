@@ -899,6 +899,16 @@ async function sendEmailAutomatically(data) {
 document.addEventListener('DOMContentLoaded', () => {
     initializePose();
     
+    // Ensure step 0 (landing page) is shown by default
+    const step0 = document.getElementById('step0');
+    const step0_5 = document.getElementById('step0_5');
+    if (step0 && step0_5) {
+        step0.classList.add('active');
+        step0.style.display = 'block';
+        step0_5.classList.remove('active');
+        step0_5.style.display = 'none';
+    }
+    
     // Google Sign-In button handler
     const googleSignInBtn = document.getElementById('googleSignInBtn');
     if (googleSignInBtn && window.signInWithGoogle) {
