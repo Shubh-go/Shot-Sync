@@ -216,15 +216,22 @@ async function startBenchmarkRecording() {
         const canvas = document.getElementById('benchmarkOutput');
         const ctx = canvas.getContext('2d');
         
-        canvas.width = 640;
-        canvas.height = 480;
-        
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { width: 640, height: 480 } 
         });
         
         benchmarkStream = stream;
         video.srcObject = stream;
+        
+        // Set canvas dimensions to match video
+        video.addEventListener('loadedmetadata', () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+        });
+        
+        // Ensure video plays
+        await video.play();
+        
         benchmarkPoseData = [];
         
         let previousStage = "neutral";
@@ -239,9 +246,21 @@ async function startBenchmarkRecording() {
         document.getElementById('benchmarkStatus').className = 'status recording';
         
         benchmarkPose.onResults((results) => {
+            // Update canvas dimensions to match video
+            const videoWidth = video.videoWidth || 640;
+            const videoHeight = video.videoHeight || 480;
+            if (canvas.width !== videoWidth || canvas.height !== videoHeight) {
+                canvas.width = videoWidth;
+                canvas.height = videoHeight;
+            }
+            
             ctx.save();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            
+            // Draw the video frame
+            if (results.image) {
+                ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            }
             
             if (results.poseLandmarks) {
                 drawConnections(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
@@ -378,15 +397,22 @@ async function startUserRecording() {
         const canvas = document.getElementById('userOutput');
         const ctx = canvas.getContext('2d');
         
-        canvas.width = 640;
-        canvas.height = 480;
-        
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { width: 640, height: 480 } 
         });
         
         userStream = stream;
         video.srcObject = stream;
+        
+        // Set canvas dimensions to match video
+        video.addEventListener('loadedmetadata', () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+        });
+        
+        // Ensure video plays
+        await video.play();
+        
         userPoseData = [];
         
         let previousStage = "neutral";
@@ -401,9 +427,21 @@ async function startUserRecording() {
         document.getElementById('userStatus').className = 'status recording';
         
         userPose.onResults((results) => {
+            // Update canvas dimensions to match video
+            const videoWidth = video.videoWidth || 640;
+            const videoHeight = video.videoHeight || 480;
+            if (canvas.width !== videoWidth || canvas.height !== videoHeight) {
+                canvas.width = videoWidth;
+                canvas.height = videoHeight;
+            }
+            
             ctx.save();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            
+            // Draw the video frame
+            if (results.image) {
+                ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            }
             
             if (results.poseLandmarks) {
                 drawConnections(ctx, results.poseLandmarks, POSE_CONNECTIONS, {

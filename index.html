@@ -249,10 +249,10 @@
             <section id="step1" class="step" style="display: none;">
                 <h2 id="step1Title">Step 1: Record Benchmark Shot</h2>
                 <p>Record a reference shot to use as your benchmark for comparison.</p>
-                <div class="video-container">
-                    <video id="benchmarkVideo" autoplay playsinline></video>
+                <div class="video-container" style="position: relative;">
+                    <video id="benchmarkVideo" autoplay playsinline muted style="width: 100%; max-width: 640px; height: auto; display: block; border-radius: 12px;"></video>
                     <canvas id="benchmarkCanvas" style="display: none;"></canvas>
-                    <canvas id="benchmarkOutput" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></canvas>
+                    <canvas id="benchmarkOutput" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; max-width: 640px;"></canvas>
                 </div>
                 <div class="controls">
                     <button id="startBenchmark" class="btn btn-primary">Start Recording</button>
@@ -266,10 +266,10 @@
             <section id="step2" class="step" style="display: none;">
                 <h2 id="step2Title">Step 2: Record Your Shot</h2>
                 <p>Now record your own shot. We'll compare it to the benchmark and analyze your form.</p>
-                <div class="video-container">
-                    <video id="userVideo" autoplay playsinline></video>
+                <div class="video-container" style="position: relative;">
+                    <video id="userVideo" autoplay playsinline muted style="width: 100%; max-width: 640px; height: auto; display: block; border-radius: 12px;"></video>
                     <canvas id="userCanvas" style="display: none;"></canvas>
-                    <canvas id="userOutput" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></canvas>
+                    <canvas id="userOutput" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; max-width: 640px;"></canvas>
                 </div>
                 <div class="controls">
                     <button id="startUser" class="btn btn-primary">Start Recording</button>
