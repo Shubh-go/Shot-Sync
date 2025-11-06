@@ -756,6 +756,238 @@ function compareShots() {
     }, 500);
 }
 
+function generatePlayerSpecificFeedback(data) {
+    const player = data.playerName;
+    if (!player || player === 'custom') {
+        return generateGenericFeedback(data);
+    }
+    
+    // Calculate key metrics from the data
+    const avgCloseness = data.userCloseness.reduce((a, b) => a + b, 0) / data.userCloseness.length;
+    
+    // Extract angle data from userPoseData
+    let avgElbowAngle = 0;
+    let avgWristAngle = 0;
+    let avgArmAngle = 0;
+    let elbowCount = 0;
+    let wristCount = 0;
+    let armCount = 0;
+    
+    if (userPoseData && userPoseData.length > 0) {
+        userPoseData.forEach(frame => {
+            if (frame.elbow_angle !== null && !isNaN(frame.elbow_angle)) {
+                avgElbowAngle += frame.elbow_angle;
+                elbowCount++;
+            }
+            if (frame.wrist_angle !== null && !isNaN(frame.wrist_angle)) {
+                avgWristAngle += frame.wrist_angle;
+                wristCount++;
+            }
+            if (frame.arm_angle !== null && !isNaN(frame.arm_angle)) {
+                avgArmAngle += frame.arm_angle;
+                armCount++;
+            }
+        });
+        
+        if (elbowCount > 0) avgElbowAngle /= elbowCount;
+        if (wristCount > 0) avgWristAngle /= wristCount;
+        if (armCount > 0) avgArmAngle /= armCount;
+    }
+    
+    const playerFeedback = {
+        'curry': {
+            name: 'Stephen Curry',
+            niche: 'One-Motion Shot',
+            idealElbow: 150,
+            idealWrist: 90,
+            idealArm: 50,
+            strengths: [],
+            weaknesses: [],
+            metrics: [],
+            summary: ''
+        },
+        'lebron': {
+            name: 'LeBron James',
+            niche: 'Power & Elevation',
+            idealElbow: 140,
+            idealWrist: 95,
+            idealArm: 55,
+            strengths: [],
+            weaknesses: [],
+            metrics: [],
+            summary: ''
+        },
+        'jordan': {
+            name: 'Michael Jordan',
+            niche: 'Classic Form & Hang Time',
+            idealElbow: 145,
+            idealWrist: 92,
+            idealArm: 52,
+            strengths: [],
+            weaknesses: [],
+            metrics: [],
+            summary: ''
+        },
+        'durant': {
+            name: 'Kevin Durant',
+            niche: 'High Release Point',
+            idealElbow: 155,
+            idealWrist: 88,
+            idealArm: 48,
+            strengths: [],
+            weaknesses: [],
+            metrics: [],
+            summary: ''
+        },
+        'clark': {
+            name: 'Caitlin Clark',
+            niche: 'Quick Release & Range',
+            idealElbow: 148,
+            idealWrist: 91,
+            idealArm: 51,
+            strengths: [],
+            weaknesses: [],
+            metrics: [],
+            summary: ''
+        }
+    };
+    
+    const feedback = playerFeedback[player];
+    if (!feedback) return generateGenericFeedback(data);
+    
+    // Calculate differences from ideal
+    const elbowDiff = Math.abs(avgElbowAngle - feedback.idealElbow);
+    const wristDiff = Math.abs(avgWristAngle - feedback.idealWrist);
+    const armDiff = Math.abs(avgArmAngle - feedback.idealArm);
+    
+    // Generate strengths
+    if (elbowDiff < 15) {
+        feedback.strengths.push({
+            title: 'Elbow Extension',
+            value: `${avgElbowAngle.toFixed(1)}°`,
+            ideal: `${feedback.idealElbow}°`,
+            score: Math.max(0, 100 - (elbowDiff * 2))
+        });
+    }
+    if (wristDiff < 10) {
+        feedback.strengths.push({
+            title: 'Wrist Snap',
+            value: `${avgWristAngle.toFixed(1)}°`,
+            ideal: `${feedback.idealWrist}°`,
+            score: Math.max(0, 100 - (wristDiff * 3))
+        });
+    }
+    if (armDiff < 8) {
+        feedback.strengths.push({
+            title: 'Arm Angle',
+            value: `${avgArmAngle.toFixed(1)}°`,
+            ideal: `${feedback.idealArm}°`,
+            score: Math.max(0, 100 - (armDiff * 4))
+        });
+    }
+    if (avgCloseness > 75) {
+        feedback.strengths.push({
+            title: 'Overall Form',
+            value: `${avgCloseness.toFixed(1)}%`,
+            ideal: '100%',
+            score: avgCloseness
+        });
+    }
+    
+    // Generate weaknesses
+    if (elbowDiff >= 15) {
+        feedback.weaknesses.push({
+            title: 'Elbow Extension',
+            value: `${avgElbowAngle.toFixed(1)}°`,
+            ideal: `${feedback.idealElbow}°`,
+            score: Math.max(0, 100 - (elbowDiff * 2)),
+            tip: player === 'curry' ? 'Focus on a smooth, continuous motion from your set point to release. Curry\'s one-motion shot requires full elbow extension.' : 'Work on fully extending your elbow at the point of release.'
+        });
+    }
+    if (wristDiff >= 10) {
+        feedback.weaknesses.push({
+            title: 'Wrist Snap',
+            value: `${avgWristAngle.toFixed(1)}°`,
+            ideal: `${feedback.idealWrist}°`,
+            score: Math.max(0, 100 - (wristDiff * 3)),
+            tip: player === 'curry' ? 'The wrist snap is crucial for Curry\'s one-motion shot. Practice a quick, decisive flick at the end of your shooting motion.' : 'Improve your wrist snap timing and angle for better ball control.'
+        });
+    }
+    if (armDiff >= 8) {
+        feedback.weaknesses.push({
+            title: 'Arm Angle',
+            value: `${avgArmAngle.toFixed(1)}°`,
+            ideal: `${feedback.idealArm}°`,
+            score: Math.max(0, 100 - (armDiff * 4)),
+            tip: player === 'durant' ? 'Durant\'s high release comes from optimal arm angle. Keep your shooting arm at the right angle for maximum elevation.' : 'Adjust your arm angle to match the ideal shooting form.'
+        });
+    }
+    if (avgCloseness < 75) {
+        feedback.weaknesses.push({
+            title: 'Overall Consistency',
+            value: `${avgCloseness.toFixed(1)}%`,
+            ideal: '100%',
+            score: avgCloseness,
+            tip: 'Focus on maintaining consistent form throughout your shooting motion.'
+        });
+    }
+    
+    // Player-specific niche comparison
+    let nicheScore = 0;
+    let nicheFeedback = '';
+    
+    if (player === 'curry') {
+        // One-motion shot: smooth transition, quick release
+        const releaseSpeed = data.userTimes.length > 0 ? data.userTimes[data.userTimes.length - 1] - data.userTimes[0] : 0;
+        const smoothness = avgCloseness;
+        nicheScore = (smoothness * 0.7) + (Math.min(100, 100 - releaseSpeed * 10) * 0.3);
+        nicheFeedback = `Your one-motion shot similarity: ${nicheScore.toFixed(1)}%. ${nicheScore > 70 ? 'Great job emulating Curry\'s signature smooth, continuous motion!' : 'Work on creating a more fluid, uninterrupted shooting motion from start to finish.'}`;
+    } else if (player === 'lebron') {
+        // Power & elevation: strong extension, high release
+        nicheScore = (avgElbowAngle / 180 * 100 * 0.6) + (avgCloseness * 0.4);
+        nicheFeedback = `Your power shot similarity: ${nicheScore.toFixed(1)}%. ${nicheScore > 70 ? 'Excellent power and elevation in your shot!' : 'Focus on generating more power through your legs and extending fully for maximum elevation.'}`;
+    } else if (player === 'jordan') {
+        // Classic form: textbook mechanics
+        nicheScore = avgCloseness;
+        nicheFeedback = `Your classic form similarity: ${nicheScore.toFixed(1)}%. ${nicheScore > 75 ? 'You\'re displaying textbook shooting mechanics like MJ!' : 'Focus on the fundamentals: balance, follow-through, and consistent form.'}`;
+    } else if (player === 'durant') {
+        // High release point: optimal arm angle
+        nicheScore = (avgArmAngle < 50 ? (avgArmAngle / 50 * 100) : 100) * 0.7 + avgCloseness * 0.3;
+        nicheFeedback = `Your high release similarity: ${nicheScore.toFixed(1)}%. ${nicheScore > 70 ? 'Great job getting your release point high like Durant!' : 'Work on elevating your release point by adjusting your arm angle and extension.'}`;
+    } else if (player === 'clark') {
+        // Quick release & range: fast motion, good extension
+        const releaseSpeed = data.userTimes.length > 0 ? data.userTimes[data.userTimes.length - 1] - data.userTimes[0] : 0;
+        nicheScore = (Math.min(100, 100 - releaseSpeed * 15) * 0.5) + (avgCloseness * 0.5);
+        nicheFeedback = `Your quick release similarity: ${nicheScore.toFixed(1)}%. ${nicheScore > 70 ? 'Excellent quick release and range!' : 'Practice a faster, more efficient shooting motion while maintaining accuracy.'}`;
+    }
+    
+    // Generate summary
+    feedback.summary = `Compared to ${feedback.name}'s ${feedback.niche}, your shot shows ${avgCloseness > 75 ? 'strong' : avgCloseness > 60 ? 'moderate' : 'room for improvement in'} similarity. ${nicheFeedback}`;
+    
+    // Add all metrics
+    feedback.metrics = [
+        { label: 'Elbow Angle', value: `${avgElbowAngle.toFixed(1)}°`, ideal: `${feedback.idealElbow}°`, score: Math.max(0, 100 - elbowDiff * 2) },
+        { label: 'Wrist Angle', value: `${avgWristAngle.toFixed(1)}°`, ideal: `${feedback.idealWrist}°`, score: Math.max(0, 100 - wristDiff * 3) },
+        { label: 'Arm Angle', value: `${avgArmAngle.toFixed(1)}°`, ideal: `${feedback.idealArm}°`, score: Math.max(0, 100 - armDiff * 4) },
+        { label: 'Overall Score', value: `${avgCloseness.toFixed(1)}%`, ideal: '100%', score: avgCloseness },
+        { label: `${feedback.niche} Similarity`, value: `${nicheScore.toFixed(1)}%`, ideal: '100%', score: nicheScore }
+    ];
+    
+    return feedback;
+}
+
+function generateGenericFeedback(data) {
+    const avgCloseness = data.userCloseness.reduce((a, b) => a + b, 0) / data.userCloseness.length;
+    return {
+        name: 'Benchmark',
+        niche: 'Standard Form',
+        strengths: avgCloseness > 70 ? [{ title: 'Overall Form', value: `${avgCloseness.toFixed(1)}%`, ideal: '100%', score: avgCloseness }] : [],
+        weaknesses: avgCloseness < 70 ? [{ title: 'Overall Consistency', value: `${avgCloseness.toFixed(1)}%`, ideal: '100%', score: avgCloseness, tip: 'Focus on maintaining consistent form throughout your shooting motion.' }] : [],
+        metrics: [{ label: 'Overall Score', value: `${avgCloseness.toFixed(1)}%`, ideal: '100%', score: avgCloseness }],
+        summary: `Your shot analysis shows ${avgCloseness > 75 ? 'strong' : avgCloseness > 60 ? 'moderate' : 'room for improvement in'} similarity to the benchmark. Keep practicing to improve your consistency!`
+    };
+}
+
 function displayResults(data) {
     document.getElementById('loading').style.display = 'none';
     document.getElementById('results').style.display = 'block';
@@ -831,23 +1063,105 @@ function displayResults(data) {
         }
     });
     
-    const feedbackList = document.getElementById('feedbackList');
-    feedbackList.innerHTML = '';
-    data.feedback.forEach(feedback => {
-        const p = document.createElement('p');
-        p.textContent = feedback;
-        feedbackList.appendChild(p);
+    // Generate and display detailed feedback
+    const detailedFeedback = generatePlayerSpecificFeedback(data);
+    displayDetailedFeedback(detailedFeedback, data.playerName);
+    
+    // Hide old feedback section
+    const oldFeedbackSection = document.getElementById('oldFeedbackSection');
+    if (oldFeedbackSection) {
+        oldFeedbackSection.style.display = 'none';
+    }
+    
+    // Automatically send email if user info is available (silently in background)
+    if (userInfo) {
+        sendEmailAutomatically(data).catch(err => console.log('Email send failed:', err));
+    }
+}
+
+function displayDetailedFeedback(feedback, playerName) {
+    const detailedFeedbackSection = document.getElementById('detailedFeedback');
+    if (!detailedFeedbackSection) return;
+    
+    detailedFeedbackSection.style.display = 'block';
+    
+    // Set player comparison title
+    const titleEl = document.getElementById('playerComparisonTitle');
+    if (titleEl && playerName && playerName !== 'custom') {
+        titleEl.textContent = `Comparing your shot to ${feedback.name}'s ${feedback.niche}`;
+    } else {
+        titleEl.textContent = 'Detailed shot analysis';
+    }
+    
+    // Display strengths
+    const strengthsList = document.getElementById('strengthsList');
+    strengthsList.innerHTML = '';
+    if (feedback.strengths.length > 0) {
+        feedback.strengths.forEach(strength => {
+            const item = document.createElement('div');
+            item.className = 'feedback-item strength-item';
+            item.innerHTML = `
+                <div class="feedback-item-header">
+                    <span class="feedback-title">${strength.title}</span>
+                    <span class="feedback-score">${strength.score.toFixed(0)}%</span>
+                </div>
+                <div class="feedback-values">
+                    <span class="feedback-value">Your: ${strength.value}</span>
+                    <span class="feedback-ideal">Ideal: ${strength.ideal}</span>
+                </div>
+            `;
+            strengthsList.appendChild(item);
+        });
+    } else {
+        strengthsList.innerHTML = '<p class="no-feedback">Keep practicing to develop your strengths!</p>';
+    }
+    
+    // Display weaknesses
+    const weaknessesList = document.getElementById('weaknessesList');
+    weaknessesList.innerHTML = '';
+    if (feedback.weaknesses.length > 0) {
+        feedback.weaknesses.forEach(weakness => {
+            const item = document.createElement('div');
+            item.className = 'feedback-item weakness-item';
+            item.innerHTML = `
+                <div class="feedback-item-header">
+                    <span class="feedback-title">${weakness.title}</span>
+                    <span class="feedback-score">${weakness.score.toFixed(0)}%</span>
+                </div>
+                <div class="feedback-values">
+                    <span class="feedback-value">Your: ${weakness.value}</span>
+                    <span class="feedback-ideal">Ideal: ${weakness.ideal}</span>
+                </div>
+                ${weakness.tip ? `<p class="feedback-tip">💡 ${weakness.tip}</p>` : ''}
+            `;
+            weaknessesList.appendChild(item);
+        });
+    } else {
+        weaknessesList.innerHTML = '<p class="no-feedback">Excellent! No major areas need improvement.</p>';
+    }
+    
+    // Display metrics
+    const metricsList = document.getElementById('metricsList');
+    metricsList.innerHTML = '';
+    feedback.metrics.forEach(metric => {
+        const item = document.createElement('div');
+        item.className = 'metric-item';
+        item.innerHTML = `
+            <div class="metric-label">${metric.label}</div>
+            <div class="metric-value">${metric.value}</div>
+            <div class="metric-ideal">Ideal: ${metric.ideal}</div>
+            <div class="metric-bar">
+                <div class="metric-bar-fill" style="width: ${metric.score}%"></div>
+            </div>
+            <div class="metric-score">${metric.score.toFixed(0)}%</div>
+        `;
+        metricsList.appendChild(item);
     });
     
-    // Automatically send email if user info is available
-    if (userInfo) {
-        sendEmailAutomatically(data);
-    } else {
-        // Show success message anyway (fallback)
-        const emailSuccessSection = document.getElementById('emailSuccessSection');
-        if (emailSuccessSection) {
-            emailSuccessSection.style.display = 'block';
-        }
+    // Display summary
+    const summaryEl = document.getElementById('shotSummary');
+    if (summaryEl) {
+        summaryEl.textContent = feedback.summary;
     }
 }
 
@@ -1380,24 +1694,39 @@ function resetApp() {
     benchmarkStream = null;
     userStream = null;
     selectedPlayer = null;
-    userInfo = null;
+    // Don't clear userInfo - keep user signed in
     
-    // Reset UI - go back to Step 0
+    // Reset UI - go back to player selection if signed in, otherwise landing page
     const step0 = document.getElementById('step0');
-    if (step0) {
-        step0.classList.add('active');
-        step0.style.display = 'block';
-        const userInfoForm = document.getElementById('userInfoForm');
-        if (userInfoForm) {
-            userInfoForm.reset();
-        }
-    }
-    
-    // Hide step0_5
     const step0_5 = document.getElementById('step0_5');
-    if (step0_5) {
-        step0_5.classList.remove('active');
-        step0_5.style.display = 'none';
+    
+    // Check if user is signed in (via Firebase auth or userInfo)
+    const isSignedIn = userInfo !== null || (window.firebaseAuth && window.firebaseAuth.currentUser);
+    
+    if (isSignedIn) {
+        // User is signed in - go to player selection
+        if (step0) {
+            step0.classList.remove('active');
+            step0.style.display = 'none';
+        }
+        if (step0_5) {
+            step0_5.classList.add('active');
+            step0_5.style.display = 'block';
+        }
+    } else {
+        // User is not signed in - go to landing page
+        if (step0) {
+            step0.classList.add('active');
+            step0.style.display = 'block';
+            const userInfoForm = document.getElementById('userInfoForm');
+            if (userInfoForm) {
+                userInfoForm.reset();
+            }
+        }
+        if (step0_5) {
+            step0_5.classList.remove('active');
+            step0_5.style.display = 'none';
+        }
     }
     
     document.getElementById('step1').classList.remove('active');

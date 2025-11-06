@@ -296,22 +296,39 @@
                     <div class="chart-container">
                         <canvas id="comparisonChart"></canvas>
                     </div>
-                    <div class="feedback-section">
-                        <h3>Feedback & Recommendations</h3>
-                        <div id="feedbackList"></div>
+                    <!-- Detailed Feedback Section -->
+                    <div id="detailedFeedback" class="detailed-feedback-section" style="display: none;">
+                        <div class="feedback-header">
+                            <h3>Your Jump Shot Analysis</h3>
+                            <p id="playerComparisonTitle" class="player-comparison-title"></p>
+                        </div>
+                        
+                        <div class="feedback-grid">
+                            <div class="strengths-card">
+                                <h4>✨ Strengths</h4>
+                                <div id="strengthsList"></div>
+                            </div>
+                            
+                            <div class="weaknesses-card">
+                                <h4>📈 Areas for Improvement</h4>
+                                <div id="weaknessesList"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="metrics-section">
+                            <h4>📊 Key Metrics</h4>
+                            <div id="metricsList" class="metrics-grid"></div>
+                        </div>
+                        
+                        <div class="summary-section">
+                            <h4>📝 Summary</h4>
+                            <p id="shotSummary"></p>
+                        </div>
                     </div>
                     
-                    <!-- Email Success Message -->
-                    <div id="emailSuccessSection" class="email-success-section" style="display: none;">
-                        <div class="success-icon">✓</div>
-                        <h3>Results Sent Successfully!</h3>
-                        <p>Your shot analysis results have been sent to your email. Check your inbox for:</p>
-                        <ul>
-                            <li>Your personalized shot analysis graph</li>
-                            <li>Detailed feedback and recommendations</li>
-                            <li>Your overall score</li>
-                        </ul>
-                        <p class="thank-you">Thank you for using Shot Sync!</p>
+                    <div class="feedback-section" id="oldFeedbackSection" style="display: none;">
+                        <h3>Feedback & Recommendations</h3>
+                        <div id="feedbackList"></div>
                     </div>
                     
                     <div class="controls">
