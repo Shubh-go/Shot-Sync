@@ -832,7 +832,9 @@ function displayResults(data) {
     });
     
     // Generate and display detailed feedback
+    console.log('Generating feedback for player:', data.playerName, 'Data:', data);
     const detailedFeedback = generatePlayerSpecificFeedback(data);
+    console.log('Generated feedback:', detailedFeedback);
     displayDetailedFeedback(detailedFeedback, data.playerName);
     
     // Hide old feedback section
@@ -851,33 +853,39 @@ function generatePlayerSpecificFeedback(data) {
     // Calculate key metrics from the data
     const avgCloseness = data.userCloseness.reduce((a, b) => a + b, 0) / data.userCloseness.length;
     
-    // Extract angle data from userPoseData
-    let avgElbowAngle = 0;
-    let avgWristAngle = 0;
-    let avgArmAngle = 0;
+    // Extract angle data from userPoseData (use global variable)
+    let avgElbowAngle = 145; // Default values if data not available
+    let avgWristAngle = 90;
+    let avgArmAngle = 50;
     let elbowCount = 0;
     let wristCount = 0;
     let armCount = 0;
     
-    if (userPoseData && userPoseData.length > 0) {
-        userPoseData.forEach(frame => {
-            if (frame.elbow_angle !== null && !isNaN(frame.elbow_angle)) {
+    // Try to get userPoseData from global scope
+    const poseData = typeof userPoseData !== 'undefined' ? userPoseData : [];
+    
+    if (poseData && poseData.length > 0) {
+        poseData.forEach(frame => {
+            if (frame && frame.elbow_angle !== null && frame.elbow_angle !== undefined && !isNaN(frame.elbow_angle)) {
                 avgElbowAngle += frame.elbow_angle;
                 elbowCount++;
             }
-            if (frame.wrist_angle !== null && !isNaN(frame.wrist_angle)) {
+            if (frame && frame.wrist_angle !== null && frame.wrist_angle !== undefined && !isNaN(frame.wrist_angle)) {
                 avgWristAngle += frame.wrist_angle;
                 wristCount++;
             }
-            if (frame.arm_angle !== null && !isNaN(frame.arm_angle)) {
+            if (frame && frame.arm_angle !== null && frame.arm_angle !== undefined && !isNaN(frame.arm_angle)) {
                 avgArmAngle += frame.arm_angle;
                 armCount++;
             }
         });
         
         if (elbowCount > 0) avgElbowAngle /= elbowCount;
+        else avgElbowAngle = 145; // Reset to default if no data
         if (wristCount > 0) avgWristAngle /= wristCount;
+        else avgWristAngle = 90; // Reset to default if no data
         if (armCount > 0) avgArmAngle /= armCount;
+        else avgArmAngle = 50; // Reset to default if no data
     }
     
     const playerFeedback = {
@@ -1076,8 +1084,12 @@ function generateGenericFeedback(data) {
 
 function displayDetailedFeedback(feedback, playerName) {
     const detailedFeedbackSection = document.getElementById('detailedFeedback');
-    if (!detailedFeedbackSection) return;
+    if (!detailedFeedbackSection) {
+        console.error('detailedFeedback element not found');
+        return;
+    }
     
+    console.log('Displaying detailed feedback:', feedback, playerName);
     detailedFeedbackSection.style.display = 'block';
     
     // Set player comparison title
