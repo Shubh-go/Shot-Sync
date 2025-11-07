@@ -751,35 +751,42 @@ function extractFormSeries(shotData) {
  * 
  * Weights:
  * - Critical (3.0): Shooting arm joints (right wrist, elbow, shoulder, index)
- * - Important (2.0): Left arm joints, shoulders, hips (for balance)
- * - Moderate (1.0): Upper body, core
- * - Low (0.3): Face landmarks, lower legs, feet
+ * - Important (2.0-2.5): Left arm joints, shoulders, core/back, hips (for balance)
+ * - Moderate (1.0-1.5): Upper body, knees (for power generation)
+ * - Low (0.3-0.5): Face landmarks, lower legs, feet
+ * 
+ * ALL landmarks are compared, but shooting arm gets highest priority.
  */
 const LANDMARK_WEIGHTS = {
-    // Face landmarks (0-10) - Low importance
+    // Face landmarks (0-10) - Low importance but still checked
     0: 0.3, 1: 0.3, 2: 0.3, 3: 0.3, 4: 0.3, 5: 0.3, 6: 0.3, 7: 0.3, 8: 0.3, 9: 0.3, 10: 0.3,
     
     // Upper body - Critical for shooting
-    11: 2.0,  // Left shoulder (balance)
-    12: 3.0,  // Right shoulder (shooting arm) ⭐
+    11: 2.0,  // Left shoulder (balance and guide hand)
+    12: 3.0,  // Right shoulder (shooting arm) ⭐⭐⭐
     13: 2.0,  // Left elbow (balance)
-    14: 3.0,  // Right elbow (shooting arm) ⭐
-    15: 2.0,  // Left wrist (balance)
+    14: 3.0,  // Right elbow (shooting arm) ⭐⭐⭐
+    15: 2.0,  // Left wrist (balance/guide hand)
     16: 3.0,  // Right wrist (shooting hand) ⭐⭐⭐
     17: 1.0,  // Left pinky
     18: 1.0,  // Right pinky
     19: 1.0,  // Left index
     20: 3.0,  // Right index (shooting finger) ⭐⭐⭐
     
-    // Lower body - Moderate importance (balance)
-    21: 1.0,  // Left hip
-    22: 1.0,  // Right hip
-    23: 1.5,  // Left hip (for balance)
-    24: 1.5,  // Right hip (for balance)
-    25: 0.5,  // Left knee
-    26: 0.5,  // Right knee
-    27: 0.3,  // Left ankle
-    28: 0.3,  // Right ankle
+    // Core/Back - Important for form (checking if back is straight, etc.)
+    // Note: MediaPipe doesn't have explicit back landmarks, but we can infer from:
+    // - Shoulder alignment (already weighted above)
+    // - Hip position (below)
+    
+    // Lower body - Important for balance and power generation
+    21: 1.5,  // Left hip (balance and power)
+    22: 1.5,  // Right hip (balance and power)
+    23: 2.0,  // Left hip (for balance and checking back alignment)
+    24: 2.0,  // Right hip (for balance and checking back alignment)
+    25: 1.5,  // Left knee (knee bend for power) ⭐
+    26: 1.5,  // Right knee (knee bend for power) ⭐
+    27: 0.5,  // Left ankle
+    28: 0.5,  // Right ankle
     29: 0.3,  // Left heel
     30: 0.3,  // Right heel
     31: 0.3,  // Left foot index
@@ -907,8 +914,8 @@ function computeRMSE(landmarks1, landmarks2) {
  * Compute weighted cosine similarity between two pose frames.
  * Cosine similarity measures the angle between two vectors (0 to 1).
  * 
- * We flatten the 3D landmarks into a single vector and compute weighted cosine similarity.
- * Important joints (wrist, elbow, shoulders) contribute more to the similarity score.
+ * Compares ALL 33 landmarks, but gives increased weight to important joints
+ * (wrists, elbows, shoulders) while still checking full body form (knees, back, etc.)
  * 
  * Returns: 1.0 = identical poses, 0.0 = orthogonal, -1.0 = opposite
  * For pose comparison, we typically get values between 0.5 and 1.0.
@@ -918,40 +925,43 @@ function computeCosineSimilarity(landmarks1, landmarks2) {
         return 0;
     }
     
-    // Instead of weighting coordinates, compute cosine similarity for each important landmark
-    // and then average, OR use a simpler approach: normalize vectors first
+    // Compute cosine similarity for EACH landmark (as a 3D vector from origin)
+    // Then weight by landmark importance and average
+    let totalWeightedSimilarity = 0;
+    let totalWeight = 0;
     
-    // Option 1: Compute cosine similarity on key shooting landmarks only
-    const keyLandmarks = [11, 12, 13, 14, 15, 16, 20]; // shoulders, elbows, wrists, index
-    let totalSimilarity = 0;
-    let validCount = 0;
-    
-    for (const idx of keyLandmarks) {
-        const p1 = landmarks1[idx];
-        const p2 = landmarks2[idx];
+    for (let i = 0; i < 33; i++) {
+        const p1 = landmarks1[i];
+        const p2 = landmarks2[i];
         
+        // Skip invalid landmarks
         if (!p1 || !p2 || isNaN(p1[0]) || isNaN(p2[0])) {
             continue;
         }
         
-        // Compute cosine similarity for this landmark's 3D vector
+        // Compute cosine similarity for this landmark's 3D vector (from origin)
+        // This measures if the direction/angle of this joint is similar
         const dot = p1[0] * p2[0] + p1[1] * p2[1] + p1[2] * p2[2];
         const mag1 = Math.sqrt(p1[0] * p1[0] + p1[1] * p1[1] + p1[2] * p1[2]);
         const mag2 = Math.sqrt(p2[0] * p2[0] + p2[1] * p2[1] + p2[2] * p2[2]);
         
         if (mag1 > 0 && mag2 > 0) {
-            const sim = dot / (mag1 * mag2);
+            const similarity = dot / (mag1 * mag2);
+            
             // Weight by landmark importance
-            const weight = getLandmarkWeight(idx);
-            totalSimilarity += sim * weight;
-            validCount += weight;
+            // Shooting joints (wrist, elbow, shoulder) have weight 3.0
+            // Balance joints (hips) have weight 1.5-2.0
+            // Other body parts have weight 0.3-1.0
+            const weight = getLandmarkWeight(i);
+            totalWeightedSimilarity += similarity * weight;
+            totalWeight += weight;
         }
     }
     
-    if (validCount === 0) return 0;
+    if (totalWeight === 0) return 0;
     
-    // Return weighted average cosine similarity
-    return totalSimilarity / validCount;
+    // Return weighted average cosine similarity across ALL landmarks
+    return totalWeightedSimilarity / totalWeight;
 }
 
 /**
