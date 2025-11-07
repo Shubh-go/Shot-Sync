@@ -1655,8 +1655,17 @@ function displayResults(data) {
     }
     
     // Display landmark coordinates table if interpolated data is available
+    console.log('Checking for interpolated data:', {
+        hasData: !!data.interpolatedUserData,
+        dataLength: data.interpolatedUserData ? data.interpolatedUserData.length : 0,
+        sampleData: data.interpolatedUserData ? data.interpolatedUserData[0] : null
+    });
+    
     if (data.interpolatedUserData && data.interpolatedUserData.length > 0) {
+        console.log('Calling displayLandmarkTable with', data.interpolatedUserData.length, 'frames');
         displayLandmarkTable(data.interpolatedUserData);
+    } else {
+        console.warn('No interpolated data available to display in table');
     }
 }
 
@@ -1664,13 +1673,22 @@ function displayResults(data) {
  * Display a table showing all landmarks and their interpolated coordinates.
  */
 function displayLandmarkTable(interpolatedData) {
-    console.log('Displaying landmark table with', interpolatedData.length, 'frames');
+    console.log('displayLandmarkTable called with', interpolatedData.length, 'frames');
+    console.log('Sample frame data:', interpolatedData[0]);
     
     const tableSection = document.getElementById('landmarkTableSection');
     const tableBody = document.getElementById('landmarkTableBody');
     
+    console.log('Table elements:', {
+        tableSection: !!tableSection,
+        tableBody: !!tableBody
+    });
+    
     if (!tableSection || !tableBody) {
-        console.error('Landmark table elements not found');
+        console.error('Landmark table elements not found!', {
+            tableSection: tableSection,
+            tableBody: tableBody
+        });
         return;
     }
     
@@ -1689,6 +1707,15 @@ function displayLandmarkTable(interpolatedData) {
     // Calculate average coordinates for each landmark across all frames
     const landmarkStats = [];
     
+    console.log('Processing landmarks, total frames:', interpolatedData.length);
+    if (interpolatedData.length > 0) {
+        console.log('First frame structure:', {
+            hasLandmarks: !!interpolatedData[0].landmarks,
+            landmarksLength: interpolatedData[0].landmarks ? interpolatedData[0].landmarks.length : 0,
+            sampleLandmark: interpolatedData[0].landmarks ? interpolatedData[0].landmarks[16] : null
+        });
+    }
+    
     for (let idx = 0; idx < 33; idx++) {
         let sumX = 0, sumY = 0, sumZ = 0;
         let validCount = 0;
@@ -1696,7 +1723,8 @@ function displayLandmarkTable(interpolatedData) {
         for (const frame of interpolatedData) {
             if (frame.landmarks && frame.landmarks[idx]) {
                 const landmark = frame.landmarks[idx];
-                if (!isNaN(landmark[0]) && !isNaN(landmark[1]) && !isNaN(landmark[2])) {
+                if (Array.isArray(landmark) && landmark.length >= 3 && 
+                    !isNaN(landmark[0]) && !isNaN(landmark[1]) && !isNaN(landmark[2])) {
                     sumX += landmark[0];
                     sumY += landmark[1];
                     sumZ += landmark[2];
@@ -1759,6 +1787,10 @@ function displayLandmarkTable(interpolatedData) {
     tableSection.style.display = 'block';
     
     console.log('Landmark table displayed with', landmarkStats.length, 'landmarks');
+    console.log('Table section display set to:', tableSection.style.display);
+    
+    // Force a reflow to ensure the table is visible
+    tableSection.offsetHeight;
 }
 
 function generatePlayerSpecificFeedback(data) {
