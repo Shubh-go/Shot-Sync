@@ -1546,6 +1546,14 @@ function compareShots() {
 
 function displayResults(data) {
     console.log('displayResults called with data:', data);
+    
+    // Show step3 (results section)
+    const step3El = document.getElementById('step3');
+    if (step3El) {
+        step3El.style.display = 'block';
+        console.log('Step 3 section displayed');
+    }
+    
     const loadingEl = document.getElementById('loading');
     const resultsEl = document.getElementById('results');
     
