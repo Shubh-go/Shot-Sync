@@ -325,6 +325,32 @@
                         </div>
                     </div>
                     
+                    <!-- Landmark Coordinates Table -->
+                    <div id="landmarkTableSection" class="landmark-table-section" style="display: none;">
+                        <h4>🔍 Interpolated Landmark Coordinates</h4>
+                        <p style="font-size: 0.9em; color: #666; margin-bottom: 15px;">
+                            All 33 MediaPipe landmarks with their x, y, z coordinates after linear interpolation.
+                            Missing landmarks are filled in using linear interpolation between last seen and first reseen positions.
+                        </p>
+                        <div id="landmarkTableContainer" style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
+                            <table id="landmarkTable" class="landmark-table">
+                                <thead>
+                                    <tr>
+                                        <th>Landmark</th>
+                                        <th>Name</th>
+                                        <th>Weight</th>
+                                        <th>Avg X</th>
+                                        <th>Avg Y</th>
+                                        <th>Avg Z</th>
+                                        <th>Frames</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="landmarkTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
                     <!-- Old Feedback Section (hidden by default) -->
                     <div class="feedback-section" style="display: none;">
                         <h3>Feedback & Recommendations</h3>

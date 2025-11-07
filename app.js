@@ -1530,12 +1530,16 @@ function compareShots() {
             feedback.push("Significant differences detected. Review the feedback below.");
         }
         
+        // Store interpolated user data for display
+        const interpolatedUserData = interpolateMissingLandmarks(userPoseData);
+        
         displayResults({
             benchTimes: benchTimes,
             userTimes: userTimes,
             userCloseness: userCloseness,
             feedback: feedback,
-            playerName: selectedPlayer
+            playerName: selectedPlayer,
+            interpolatedUserData: interpolatedUserData
         });
     }, 500);
 }
@@ -1649,6 +1653,112 @@ function displayResults(data) {
     if (oldFeedbackSection) {
         oldFeedbackSection.style.display = 'none';
     }
+    
+    // Display landmark coordinates table if interpolated data is available
+    if (data.interpolatedUserData && data.interpolatedUserData.length > 0) {
+        displayLandmarkTable(data.interpolatedUserData);
+    }
+}
+
+/**
+ * Display a table showing all landmarks and their interpolated coordinates.
+ */
+function displayLandmarkTable(interpolatedData) {
+    console.log('Displaying landmark table with', interpolatedData.length, 'frames');
+    
+    const tableSection = document.getElementById('landmarkTableSection');
+    const tableBody = document.getElementById('landmarkTableBody');
+    
+    if (!tableSection || !tableBody) {
+        console.error('Landmark table elements not found');
+        return;
+    }
+    
+    // MediaPipe landmark names
+    const landmarkNames = {
+        0: 'Nose', 1: 'Left Eye Inner', 2: 'Left Eye', 3: 'Left Eye Outer', 4: 'Right Eye Inner',
+        5: 'Right Eye', 6: 'Right Eye Outer', 7: 'Left Ear', 8: 'Right Ear', 9: 'Mouth Left',
+        10: 'Mouth Right', 11: 'Left Shoulder', 12: 'Right Shoulder', 13: 'Left Elbow',
+        14: 'Right Elbow', 15: 'Left Wrist', 16: 'Right Wrist', 17: 'Left Pinky',
+        18: 'Right Pinky', 19: 'Left Index', 20: 'Right Index', 21: 'Left Thumb',
+        22: 'Right Thumb', 23: 'Left Hip', 24: 'Right Hip', 25: 'Left Knee',
+        26: 'Right Knee', 27: 'Left Ankle', 28: 'Right Ankle', 29: 'Left Heel',
+        30: 'Right Heel', 31: 'Left Foot Index', 32: 'Right Foot Index'
+    };
+    
+    // Calculate average coordinates for each landmark across all frames
+    const landmarkStats = [];
+    
+    for (let idx = 0; idx < 33; idx++) {
+        let sumX = 0, sumY = 0, sumZ = 0;
+        let validCount = 0;
+        
+        for (const frame of interpolatedData) {
+            if (frame.landmarks && frame.landmarks[idx]) {
+                const landmark = frame.landmarks[idx];
+                if (!isNaN(landmark[0]) && !isNaN(landmark[1]) && !isNaN(landmark[2])) {
+                    sumX += landmark[0];
+                    sumY += landmark[1];
+                    sumZ += landmark[2];
+                    validCount++;
+                }
+            }
+        }
+        
+        const avgX = validCount > 0 ? sumX / validCount : NaN;
+        const avgY = validCount > 0 ? sumY / validCount : NaN;
+        const avgZ = validCount > 0 ? sumZ / validCount : NaN;
+        const weight = getLandmarkWeight(idx);
+        
+        landmarkStats.push({
+            index: idx,
+            name: landmarkNames[idx] || `Landmark ${idx}`,
+            weight: weight,
+            avgX: avgX,
+            avgY: avgY,
+            avgZ: avgZ,
+            validFrames: validCount,
+            totalFrames: interpolatedData.length
+        });
+    }
+    
+    // Clear existing table rows
+    tableBody.innerHTML = '';
+    
+    // Create table rows
+    landmarkStats.forEach(stat => {
+        const row = document.createElement('tr');
+        
+        // Highlight critical landmarks
+        const isCritical = [12, 14, 16, 20].includes(stat.index);
+        if (isCritical) {
+            row.style.backgroundColor = '#fff3cd';
+            row.style.fontWeight = 'bold';
+        }
+        
+        // Format coordinates
+        const formatCoord = (val) => {
+            if (isNaN(val)) return 'N/A';
+            return val.toFixed(2);
+        };
+        
+        row.innerHTML = `
+            <td>${stat.index}</td>
+            <td>${stat.name}</td>
+            <td>${stat.weight.toFixed(1)}x</td>
+            <td>${formatCoord(stat.avgX)}</td>
+            <td>${formatCoord(stat.avgY)}</td>
+            <td>${formatCoord(stat.avgZ)}</td>
+            <td>${stat.validFrames}/${stat.totalFrames}</td>
+        `;
+        
+        tableBody.appendChild(row);
+    });
+    
+    // Show the table section
+    tableSection.style.display = 'block';
+    
+    console.log('Landmark table displayed with', landmarkStats.length, 'landmarks');
 }
 
 function generatePlayerSpecificFeedback(data) {
