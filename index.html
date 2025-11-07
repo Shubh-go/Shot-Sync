@@ -339,6 +339,14 @@
         </div>
     </div>
 
+    <!-- Player Benchmark Data -->
+    <script src="player_data/lebron_benchmark.js"></script>
+    <script>
+        // Make lebron_data available globally
+        if (typeof lebron_data !== 'undefined') {
+            window.lebron_benchmark_data = lebron_data;
+        }
+    </script>
     <script src="app.js"></script>
 </body>
 </html>

@@ -105,7 +105,13 @@ function generateExampleBenchmarkData() {
 function initializeProPlayerBenchmarks() {
     const players = ['curry', 'lebron', 'jordan', 'durant', 'clark'];
     players.forEach(player => {
-        proPlayerBenchmarks[player] = generateExampleBenchmarkData();
+        // Use real data for LeBron if available, otherwise use synthetic
+        if (player === 'lebron' && typeof window.lebron_benchmark_data !== 'undefined') {
+            proPlayerBenchmarks[player] = window.lebron_benchmark_data;
+            console.log(`Loaded real LeBron data: ${proPlayerBenchmarks[player].length} frames`);
+        } else {
+            proPlayerBenchmarks[player] = generateExampleBenchmarkData();
+        }
     });
 }
 
