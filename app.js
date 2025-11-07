@@ -1110,31 +1110,45 @@ function computeUserClosenessLandmarks(benchLandmarks, userLandmarks, path) {
             // - 0.5-0.7 = somewhat similar
             // - <0.5 = different
             
-            // Convert cosine similarity to score with lenient scaling:
-            // - 0.95+ = 100% (near perfect)
-            // - 0.85 = 90% (very good)
-            // - 0.75 = 75% (good)
-            // - 0.65 = 60% (decent)
+            // Convert cosine similarity to score with VERY lenient scaling:
+            // Cosine similarity measures direction similarity, not position
+            // Even if positions differ, directions can be similar
+            // - 0.99+ = 100% (near perfect)
+            // - 0.90 = 95% (excellent)
+            // - 0.80 = 85% (very good)
+            // - 0.70 = 70% (good)
+            // - 0.60 = 55% (decent)
             // - 0.50 = 40% (needs work)
+            // - 0.40 = 30% (different)
             // - 0.30 = 20% (very different)
+            // - 0.20 = 10% (completely different)
             let cosineScore;
-            if (cosineSim >= 0.95) {
+            if (cosineSim >= 0.99) {
                 cosineScore = 100;
-            } else if (cosineSim >= 0.85) {
-                // 0.85-0.95: map to 80-100%
-                cosineScore = 80 + ((cosineSim - 0.85) / 0.1) * 20;
-            } else if (cosineSim >= 0.75) {
-                // 0.75-0.85: map to 60-80%
-                cosineScore = 60 + ((cosineSim - 0.75) / 0.1) * 20;
-            } else if (cosineSim >= 0.65) {
-                // 0.65-0.75: map to 45-60%
-                cosineScore = 45 + ((cosineSim - 0.65) / 0.1) * 15;
+            } else if (cosineSim >= 0.90) {
+                // 0.90-0.99: map to 90-100%
+                cosineScore = 90 + ((cosineSim - 0.90) / 0.09) * 10;
+            } else if (cosineSim >= 0.80) {
+                // 0.80-0.90: map to 75-90%
+                cosineScore = 75 + ((cosineSim - 0.80) / 0.10) * 15;
+            } else if (cosineSim >= 0.70) {
+                // 0.70-0.80: map to 60-75%
+                cosineScore = 60 + ((cosineSim - 0.70) / 0.10) * 15;
+            } else if (cosineSim >= 0.60) {
+                // 0.60-0.70: map to 45-60%
+                cosineScore = 45 + ((cosineSim - 0.60) / 0.10) * 15;
             } else if (cosineSim >= 0.50) {
-                // 0.50-0.65: map to 25-45%
-                cosineScore = 25 + ((cosineSim - 0.50) / 0.15) * 20;
+                // 0.50-0.60: map to 30-45%
+                cosineScore = 30 + ((cosineSim - 0.50) / 0.10) * 15;
+            } else if (cosineSim >= 0.40) {
+                // 0.40-0.50: map to 20-30%
+                cosineScore = 20 + ((cosineSim - 0.40) / 0.10) * 10;
+            } else if (cosineSim >= 0.30) {
+                // 0.30-0.40: map to 10-20%
+                cosineScore = 10 + ((cosineSim - 0.30) / 0.10) * 10;
             } else {
-                // <0.50: map to 0-25%
-                cosineScore = Math.max(0, (cosineSim / 0.50) * 25);
+                // <0.30: map to 0-10%
+                cosineScore = Math.max(0, (cosineSim / 0.30) * 10);
             }
             
             // RMSE adjustment: Use as a minor penalty/bonus
