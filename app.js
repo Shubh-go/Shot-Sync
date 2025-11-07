@@ -749,6 +749,13 @@ function extractFormSeries(shotData) {
  * Compute 3D landmark distance between two pose frames.
  * Returns the average Euclidean distance across all valid landmarks.
  * 
+ * COORDINATE SYSTEM:
+ * - Both poses are normalized: origin (0,0,0) is at shoulder midpoint
+ * - X-axis: left shoulder → right shoulder (aligned horizontally)
+ * - Y-axis: up → down
+ * - Z-axis: depth (negative = closer to camera)
+ * - All coordinates are in pixels, relative to shoulder midpoint
+ * 
  * MediaPipe landmark indices (key for shooting):
  * - 11: Left Shoulder
  * - 12: Right Shoulder
@@ -762,6 +769,15 @@ function extractFormSeries(shotData) {
  * - Your landmarks[16] (right wrist) vs LeBron's landmarks[16] (right wrist)
  * - Your landmarks[14] (right elbow) vs LeBron's landmarks[14] (right elbow)
  * etc.
+ * 
+ * DISTANCE CALCULATION:
+ * For each corresponding landmark pair:
+ *   dx = your_x - lebron_x
+ *   dy = your_y - lebron_y
+ *   dz = your_z - lebron_z
+ *   distance = √(dx² + dy² + dz²)
+ * 
+ * Returns average distance across all 33 landmarks.
  */
 function computeLandmarkDistance(landmarks1, landmarks2) {
     if (!landmarks1 || !landmarks2 || landmarks1.length !== 33 || landmarks2.length !== 33) {
@@ -773,9 +789,10 @@ function computeLandmarkDistance(landmarks1, landmarks2) {
     
     // MediaPipe has 33 landmarks in fixed order (0-32)
     // Index i in your pose corresponds to index i in LeBron's pose
+    // Both are normalized: origin at shoulder midpoint, shoulders aligned with x-axis
     for (let i = 0; i < 33; i++) {
-        const p1 = landmarks1[i];  // Your landmark at index i
-        const p2 = landmarks2[i];  // LeBron's landmark at index i (same body part)
+        const p1 = landmarks1[i];  // Your landmark at index i (normalized coordinates)
+        const p2 = landmarks2[i];  // LeBron's landmark at index i (normalized coordinates)
         
         // Skip if either landmark is invalid
         if (!p1 || !p2 || isNaN(p1[0]) || isNaN(p2[0])) {
@@ -783,17 +800,18 @@ function computeLandmarkDistance(landmarks1, landmarks2) {
         }
         
         // Calculate 3D Euclidean distance between corresponding landmarks
-        // p1 and p2 are both [x, y, z] coordinates
-        const dx = p1[0] - p2[0];
-        const dy = p1[1] - p2[1];
-        const dz = p1[2] - p2[2];
+        // p1 and p2 are both [x, y, z] coordinates in pixels
+        // Both are relative to their respective shoulder midpoints (origin)
+        const dx = p1[0] - p2[0];  // X difference (left-right)
+        const dy = p1[1] - p2[1];  // Y difference (up-down)
+        const dz = p1[2] - p2[2];  // Z difference (depth)
         const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
         
         totalDistance += distance;
         validCount++;
     }
     
-    // Return average distance across all valid landmarks
+    // Return average distance across all valid landmarks (in pixels)
     return validCount > 0 ? totalDistance / validCount : Infinity;
 }
 
