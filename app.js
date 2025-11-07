@@ -746,8 +746,56 @@ function extractFormSeries(shotData) {
 }
 
 /**
- * Compute 3D landmark distance between two pose frames.
- * Returns the average Euclidean distance across all valid landmarks.
+ * Landmark weights for shooting form comparison.
+ * Higher weights = more important for shooting accuracy.
+ * 
+ * Weights:
+ * - Critical (3.0): Shooting arm joints (right wrist, elbow, shoulder, index)
+ * - Important (2.0): Left arm joints, shoulders, hips (for balance)
+ * - Moderate (1.0): Upper body, core
+ * - Low (0.3): Face landmarks, lower legs, feet
+ */
+const LANDMARK_WEIGHTS = {
+    // Face landmarks (0-10) - Low importance
+    0: 0.3, 1: 0.3, 2: 0.3, 3: 0.3, 4: 0.3, 5: 0.3, 6: 0.3, 7: 0.3, 8: 0.3, 9: 0.3, 10: 0.3,
+    
+    // Upper body - Critical for shooting
+    11: 2.0,  // Left shoulder (balance)
+    12: 3.0,  // Right shoulder (shooting arm) ⭐
+    13: 2.0,  // Left elbow (balance)
+    14: 3.0,  // Right elbow (shooting arm) ⭐
+    15: 2.0,  // Left wrist (balance)
+    16: 3.0,  // Right wrist (shooting hand) ⭐⭐⭐
+    17: 1.0,  // Left pinky
+    18: 1.0,  // Right pinky
+    19: 1.0,  // Left index
+    20: 3.0,  // Right index (shooting finger) ⭐⭐⭐
+    
+    // Lower body - Moderate importance (balance)
+    21: 1.0,  // Left hip
+    22: 1.0,  // Right hip
+    23: 1.5,  // Left hip (for balance)
+    24: 1.5,  // Right hip (for balance)
+    25: 0.5,  // Left knee
+    26: 0.5,  // Right knee
+    27: 0.3,  // Left ankle
+    28: 0.3,  // Right ankle
+    29: 0.3,  // Left heel
+    30: 0.3,  // Right heel
+    31: 0.3,  // Left foot index
+    32: 0.3   // Right foot index
+};
+
+/**
+ * Get weight for a landmark index.
+ */
+function getLandmarkWeight(index) {
+    return LANDMARK_WEIGHTS[index] || 1.0;
+}
+
+/**
+ * Compute weighted 3D landmark distance between two pose frames.
+ * Returns the weighted average Euclidean distance.
  * 
  * COORDINATE SYSTEM:
  * - Both poses are normalized: origin (0,0,0) is at shoulder midpoint
@@ -757,18 +805,13 @@ function extractFormSeries(shotData) {
  * - All coordinates are in pixels, relative to shoulder midpoint
  * 
  * MediaPipe landmark indices (key for shooting):
- * - 11: Left Shoulder
- * - 12: Right Shoulder
- * - 13: Left Elbow
- * - 14: Right Elbow
- * - 15: Left Wrist
- * - 16: Right Wrist (shooting hand)
- * - 20: Right Index (shooting finger)
- * 
- * This function compares corresponding landmarks:
- * - Your landmarks[16] (right wrist) vs LeBron's landmarks[16] (right wrist)
- * - Your landmarks[14] (right elbow) vs LeBron's landmarks[14] (right elbow)
- * etc.
+ * - 11: Left Shoulder (weight: 2.0)
+ * - 12: Right Shoulder (weight: 3.0) ⭐
+ * - 13: Left Elbow (weight: 2.0)
+ * - 14: Right Elbow (weight: 3.0) ⭐
+ * - 15: Left Wrist (weight: 2.0)
+ * - 16: Right Wrist (weight: 3.0) ⭐⭐⭐
+ * - 20: Right Index (weight: 3.0) ⭐⭐⭐
  * 
  * DISTANCE CALCULATION:
  * For each corresponding landmark pair:
@@ -776,16 +819,17 @@ function extractFormSeries(shotData) {
  *   dy = your_y - lebron_y
  *   dz = your_z - lebron_z
  *   distance = √(dx² + dy² + dz²)
+ *   weighted_distance = distance × weight
  * 
- * Returns average distance across all 33 landmarks.
+ * Returns weighted average distance across all 33 landmarks.
  */
 function computeLandmarkDistance(landmarks1, landmarks2) {
     if (!landmarks1 || !landmarks2 || landmarks1.length !== 33 || landmarks2.length !== 33) {
         return Infinity;
     }
     
-    let totalDistance = 0;
-    let validCount = 0;
+    let totalWeightedDistance = 0;
+    let totalWeight = 0;
     
     // MediaPipe has 33 landmarks in fixed order (0-32)
     // Index i in your pose corresponds to index i in LeBron's pose
@@ -807,28 +851,30 @@ function computeLandmarkDistance(landmarks1, landmarks2) {
         const dz = p1[2] - p2[2];  // Z difference (depth)
         const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
         
-        totalDistance += distance;
-        validCount++;
+        // Apply weight based on landmark importance
+        const weight = getLandmarkWeight(i);
+        totalWeightedDistance += distance * weight;
+        totalWeight += weight;
     }
     
-    // Return average distance across all valid landmarks (in pixels)
-    return validCount > 0 ? totalDistance / validCount : Infinity;
+    // Return weighted average distance (in pixels)
+    return totalWeight > 0 ? totalWeightedDistance / totalWeight : Infinity;
 }
 
 /**
- * Compute Root Mean Square Error (RMSE) between two pose frames.
- * RMSE = √(mean of squared differences)
+ * Compute weighted Root Mean Square Error (RMSE) between two pose frames.
+ * RMSE = √(weighted mean of squared differences)
  * 
  * Lower RMSE = more similar poses
- * Returns RMSE in pixels.
+ * Returns weighted RMSE in pixels.
  */
 function computeRMSE(landmarks1, landmarks2) {
     if (!landmarks1 || !landmarks2 || landmarks1.length !== 33 || landmarks2.length !== 33) {
         return Infinity;
     }
     
-    let sumSquaredErrors = 0;
-    let validCount = 0;
+    let sumWeightedSquaredErrors = 0;
+    let totalWeight = 0;
     
     for (let i = 0; i < 33; i++) {
         const p1 = landmarks1[i];
@@ -844,22 +890,25 @@ function computeRMSE(landmarks1, landmarks2) {
         const dz = p1[2] - p2[2];
         const squaredError = dx * dx + dy * dy + dz * dz;
         
-        sumSquaredErrors += squaredError;
-        validCount++;
+        // Apply weight based on landmark importance
+        const weight = getLandmarkWeight(i);
+        sumWeightedSquaredErrors += squaredError * weight;
+        totalWeight += weight;
     }
     
-    if (validCount === 0) return Infinity;
+    if (totalWeight === 0) return Infinity;
     
-    // RMSE = √(mean of squared errors)
-    const meanSquaredError = sumSquaredErrors / validCount;
-    return Math.sqrt(meanSquaredError);
+    // Weighted RMSE = √(weighted mean of squared errors)
+    const weightedMeanSquaredError = sumWeightedSquaredErrors / totalWeight;
+    return Math.sqrt(weightedMeanSquaredError);
 }
 
 /**
- * Compute cosine similarity between two pose frames.
+ * Compute weighted cosine similarity between two pose frames.
  * Cosine similarity measures the angle between two vectors (0 to 1).
  * 
- * We flatten the 3D landmarks into a single vector and compute cosine similarity.
+ * We flatten the 3D landmarks into a single vector and compute weighted cosine similarity.
+ * Important joints (wrist, elbow, shoulders) contribute more to the similarity score.
  * 
  * Returns: 1.0 = identical poses, 0.0 = orthogonal, -1.0 = opposite
  * For pose comparison, we typically get values between 0.5 and 1.0.
@@ -869,35 +918,37 @@ function computeCosineSimilarity(landmarks1, landmarks2) {
         return 0;
     }
     
-    // Flatten landmarks into vectors (99 dimensions: 33 landmarks × 3 coordinates)
+    // Flatten landmarks into weighted vectors (99 dimensions: 33 landmarks × 3 coordinates)
     const vector1 = [];
     const vector2 = [];
     
     for (let i = 0; i < 33; i++) {
         const p1 = landmarks1[i];
         const p2 = landmarks2[i];
+        const weight = getLandmarkWeight(i);
         
         // Use 0 for invalid landmarks (consistent with normalization)
+        // Apply weight to each coordinate
         if (!p1 || isNaN(p1[0])) {
             vector1.push(0, 0, 0);
         } else {
-            vector1.push(p1[0], p1[1], p1[2]);
+            vector1.push(p1[0] * weight, p1[1] * weight, p1[2] * weight);
         }
         
         if (!p2 || isNaN(p2[0])) {
             vector2.push(0, 0, 0);
         } else {
-            vector2.push(p2[0], p2[1], p2[2]);
+            vector2.push(p2[0] * weight, p2[1] * weight, p2[2] * weight);
         }
     }
     
-    // Compute dot product
+    // Compute weighted dot product
     let dotProduct = 0;
     for (let i = 0; i < vector1.length; i++) {
         dotProduct += vector1[i] * vector2[i];
     }
     
-    // Compute magnitudes
+    // Compute weighted magnitudes
     let mag1 = 0;
     let mag2 = 0;
     for (let i = 0; i < vector1.length; i++) {
@@ -912,7 +963,7 @@ function computeCosineSimilarity(landmarks1, landmarks2) {
         return 0;
     }
     
-    // Cosine similarity = dot product / (magnitude1 × magnitude2)
+    // Weighted cosine similarity = dot product / (magnitude1 × magnitude2)
     return dotProduct / (mag1 * mag2);
 }
 
