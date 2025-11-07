@@ -267,6 +267,7 @@ function normalizePoseOrientation(landmarks) {
     }
     
     // Calculate angle to rotate shoulder vector to align with +X axis
+    // Ensure the vector points in +X direction (right shoulder should have higher X than left)
     // Target: [1, 0] in XZ plane
     const targetVec = [1, 0];
     const currentVec = [shoulderVecXZ[0] / shoulderMag, shoulderVecXZ[1] / shoulderMag];
@@ -274,7 +275,12 @@ function normalizePoseOrientation(landmarks) {
     // Calculate rotation angle (around Y-axis)
     const cosAngle = currentVec[0] * targetVec[0] + currentVec[1] * targetVec[1];
     const sinAngle = currentVec[0] * targetVec[1] - currentVec[1] * targetVec[0];
-    const angle = Math.atan2(sinAngle, cosAngle);
+    let angle = Math.atan2(sinAngle, cosAngle);
+    
+    // If the dot product is negative, we need to flip direction (rotate 180 degrees)
+    if (cosAngle < 0) {
+        angle += Math.PI;
+    }
     
     // Rotation matrix for rotation around Y-axis
     const cos = Math.cos(-angle); // Negative to align with +X

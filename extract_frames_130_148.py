@@ -84,6 +84,7 @@ def normalize_pose_orientation(landmarks):
         return landmarks.tolist()  # Shoulders too close, can't determine orientation
     
     # Calculate angle to rotate shoulder vector to align with +X axis
+    # Ensure the vector points in +X direction (right shoulder should have higher X than left)
     target_vec = np.array([1.0, 0.0])
     current_vec = shoulder_vec_xz / shoulder_mag
     
@@ -91,6 +92,10 @@ def normalize_pose_orientation(landmarks):
     cos_angle = np.dot(current_vec, target_vec)
     sin_angle = current_vec[0] * target_vec[1] - current_vec[1] * target_vec[0]
     angle = np.arctan2(sin_angle, cos_angle)
+    
+    # If the dot product is negative, we need to flip direction (rotate 180 degrees)
+    if cos_angle < 0:
+        angle += np.pi
     
     # Rotation matrix for rotation around Y-axis
     cos = np.cos(-angle)  # Negative to align with +X
