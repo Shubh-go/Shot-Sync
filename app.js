@@ -713,11 +713,30 @@ function computeOverallForm(e, w, a) {
     return angles.reduce((a, b) => a + b, 0) / angles.length;
 }
 
+/**
+ * Extract a single-dimensional form series from shot data.
+ * Uses a weighted combination of key angles for better comparison.
+ */
 function extractFormSeries(shotData) {
     const times = [];
     const formVals = [];
     for (const entry of shotData) {
-        const measure = computeOverallForm(entry.elbow_angle, entry.wrist_angle, entry.arm_angle);
+        // Use weighted combination: elbow angle is most important for shooting form
+        let measure = null;
+        if (entry.elbow_angle !== null && entry.elbow_angle !== undefined) {
+            measure = entry.elbow_angle * 0.5; // 50% weight
+            if (entry.wrist_angle !== null && entry.wrist_angle !== undefined) {
+                measure += entry.wrist_angle * 0.3; // 30% weight
+            }
+            if (entry.arm_angle !== null && entry.arm_angle !== undefined) {
+                measure += entry.arm_angle * 0.2; // 20% weight
+            }
+        } else if (entry.wrist_angle !== null && entry.wrist_angle !== undefined) {
+            measure = entry.wrist_angle;
+        } else if (entry.arm_angle !== null && entry.arm_angle !== undefined) {
+            measure = entry.arm_angle;
+        }
+        
         if (measure !== null) {
             times.push(entry.time);
             formVals.push(measure);
@@ -726,7 +745,56 @@ function extractFormSeries(shotData) {
     return { times, formVals };
 }
 
-// Simple DTW implementation
+/**
+ * Compute 3D landmark distance between two pose frames.
+ * Returns the average Euclidean distance across all valid landmarks.
+ */
+function computeLandmarkDistance(landmarks1, landmarks2) {
+    if (!landmarks1 || !landmarks2 || landmarks1.length !== 33 || landmarks2.length !== 33) {
+        return Infinity;
+    }
+    
+    let totalDistance = 0;
+    let validCount = 0;
+    
+    for (let i = 0; i < 33; i++) {
+        const p1 = landmarks1[i];
+        const p2 = landmarks2[i];
+        
+        // Skip if either landmark is invalid
+        if (!p1 || !p2 || isNaN(p1[0]) || isNaN(p2[0])) {
+            continue;
+        }
+        
+        // Calculate 3D Euclidean distance
+        const dx = p1[0] - p2[0];
+        const dy = p1[1] - p2[1];
+        const dz = p1[2] - p2[2];
+        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        
+        totalDistance += distance;
+        validCount++;
+    }
+    
+    return validCount > 0 ? totalDistance / validCount : Infinity;
+}
+
+/**
+ * Extract landmark series for 3D pose comparison.
+ */
+function extractLandmarkSeries(shotData) {
+    const times = [];
+    const landmarkFrames = [];
+    for (const entry of shotData) {
+        if (entry.landmarks && entry.landmarks.length === 33) {
+            times.push(entry.time);
+            landmarkFrames.push(entry.landmarks);
+        }
+    }
+    return { times, landmarkFrames };
+}
+
+// Simple DTW implementation for 1D series (angles)
 function dtw(series1, series2) {
     const n = series1.length;
     const m = series2.length;
@@ -763,8 +831,51 @@ function dtw(series1, series2) {
     return { distance: dtwMatrix[n][m], path };
 }
 
+// DTW implementation for 3D landmark sequences
+function dtwLandmarks(series1, series2) {
+    const n = series1.length;
+    const m = series2.length;
+    const dtwMatrix = Array(n + 1).fill(null).map(() => Array(m + 1).fill(Infinity));
+    dtwMatrix[0][0] = 0;
+    
+    for (let i = 1; i <= n; i++) {
+        for (let j = 1; j <= m; j++) {
+            const cost = computeLandmarkDistance(series1[i - 1], series2[j - 1]);
+            dtwMatrix[i][j] = cost + Math.min(
+                dtwMatrix[i - 1][j],
+                dtwMatrix[i][j - 1],
+                dtwMatrix[i - 1][j - 1]
+            );
+        }
+    }
+    
+    // Build path
+    const path = [];
+    let i = n, j = m;
+    while (i > 0 && j > 0) {
+        path.unshift([i - 1, j - 1]);
+        const prev = [
+            dtwMatrix[i - 1][j],
+            dtwMatrix[i][j - 1],
+            dtwMatrix[i - 1][j - 1]
+        ];
+        const minIdx = prev.indexOf(Math.min(...prev));
+        if (minIdx === 0) i--;
+        else if (minIdx === 1) j--;
+        else { i--; j--; }
+    }
+    
+    return { distance: dtwMatrix[n][m], path };
+}
+
+/**
+ * Compute user closeness scores based on angle differences.
+ * More accurate: uses a steeper penalty curve for better discrimination.
+ */
 function computeUserCloseness(benchForm, userForm, path) {
-    const alpha = 2.0;
+    // More accurate alpha: for angles (0-180°), a 30° difference should be significant
+    // Formula: 100 - (diff / maxDiff) * 100, where maxDiff = 30° for 0% similarity
+    const maxAngleDiff = 30.0; // 30° difference = 0% similarity
     const userMap = {};
     
     for (const [i, j] of path) {
@@ -778,10 +889,45 @@ function computeUserCloseness(benchForm, userForm, path) {
             const iList = userMap[j];
             const iMid = iList[Math.floor(iList.length / 2)];
             const diff = Math.abs(userForm[j] - benchForm[iMid]);
-            const score = Math.max(0, Math.min(100, 100 - alpha * diff));
+            // Linear scaling: 0° diff = 100%, 30° diff = 0%
+            const score = Math.max(0, Math.min(100, 100 - (diff / maxAngleDiff) * 100));
             userCloseness.push(score);
         } else {
-            userCloseness.push(100);
+            // If no match found, give a neutral score (not 100%)
+            userCloseness.push(50);
+        }
+    }
+    return userCloseness;
+}
+
+/**
+ * Compute user closeness scores based on 3D landmark distances.
+ * More accurate for pose comparison.
+ */
+function computeUserClosenessLandmarks(benchLandmarks, userLandmarks, path) {
+    // Normalize distance to similarity score
+    // Typical landmark distances: 0-200 pixels
+    // 0 pixels = 100%, 100 pixels = 0%, 200+ pixels = 0%
+    const maxDistance = 100.0; // pixels
+    const userMap = {};
+    
+    for (const [i, j] of path) {
+        if (!userMap[j]) userMap[j] = [];
+        userMap[j].push(i);
+    }
+    
+    const userCloseness = [];
+    for (let j = 0; j < userLandmarks.length; j++) {
+        if (userMap[j]) {
+            const iList = userMap[j];
+            const iMid = iList[Math.floor(iList.length / 2)];
+            const distance = computeLandmarkDistance(userLandmarks[j], benchLandmarks[iMid]);
+            // Linear scaling: 0 pixels = 100%, 100 pixels = 0%
+            const score = Math.max(0, Math.min(100, 100 - (distance / maxDistance) * 100));
+            userCloseness.push(score);
+        } else {
+            // If no match found, give a neutral score
+            userCloseness.push(50);
         }
     }
     return userCloseness;
@@ -821,6 +967,23 @@ function compareShots() {
             return;
         }
         
+        // Try to use 3D landmarks for more accurate comparison, fallback to angles
+        const benchLandmarks = extractLandmarkSeries(benchmarkData);
+        const userLandmarks = extractLandmarkSeries(userPoseData);
+        
+        let userCloseness;
+        let benchTimes, userTimes;
+        
+        // Use 3D landmarks if available, otherwise use angle-based comparison
+        if (benchLandmarks.landmarkFrames.length >= 2 && userLandmarks.landmarkFrames.length >= 2) {
+            // Use 3D landmark comparison (more accurate)
+            const { distance, path } = dtwLandmarks(benchLandmarks.landmarkFrames, userLandmarks.landmarkFrames);
+            userCloseness = computeUserClosenessLandmarks(benchLandmarks.landmarkFrames, userLandmarks.landmarkFrames, path);
+            benchTimes = benchLandmarks.times;
+            userTimes = userLandmarks.times;
+            console.log('Using 3D landmark comparison (more accurate)');
+        } else {
+            // Fallback to angle-based comparison
         const benchForm = extractFormSeries(benchmarkData);
         const userForm = extractFormSeries(userPoseData);
         
@@ -830,7 +993,16 @@ function compareShots() {
         }
         
         const { distance, path } = dtw(benchForm.formVals, userForm.formVals);
-        const userCloseness = computeUserCloseness(benchForm.formVals, userForm.formVals, path);
+            userCloseness = computeUserCloseness(benchForm.formVals, userForm.formVals, path);
+            benchTimes = benchForm.times;
+            userTimes = userForm.times;
+            console.log('Using angle-based comparison (fallback)');
+        }
+        
+        if (userCloseness.length === 0) {
+            document.getElementById('loading').innerHTML = '<p style="color: red;">Could not compute similarity. Please try again.</p>';
+            return;
+        }
         
         const avgCloseness = userCloseness.reduce((a, b) => a + b, 0) / userCloseness.length;
         
@@ -849,8 +1021,8 @@ function compareShots() {
         }
         
         displayResults({
-            benchTimes: benchForm.times,
-            userTimes: userForm.times,
+            benchTimes: benchTimes,
+            userTimes: userTimes,
             userCloseness: userCloseness,
             feedback: feedback,
             playerName: selectedPlayer
