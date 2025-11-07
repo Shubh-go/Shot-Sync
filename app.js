@@ -816,6 +816,107 @@ function computeLandmarkDistance(landmarks1, landmarks2) {
 }
 
 /**
+ * Compute Root Mean Square Error (RMSE) between two pose frames.
+ * RMSE = √(mean of squared differences)
+ * 
+ * Lower RMSE = more similar poses
+ * Returns RMSE in pixels.
+ */
+function computeRMSE(landmarks1, landmarks2) {
+    if (!landmarks1 || !landmarks2 || landmarks1.length !== 33 || landmarks2.length !== 33) {
+        return Infinity;
+    }
+    
+    let sumSquaredErrors = 0;
+    let validCount = 0;
+    
+    for (let i = 0; i < 33; i++) {
+        const p1 = landmarks1[i];
+        const p2 = landmarks2[i];
+        
+        if (!p1 || !p2 || isNaN(p1[0]) || isNaN(p2[0])) {
+            continue;
+        }
+        
+        // Calculate squared error for this landmark
+        const dx = p1[0] - p2[0];
+        const dy = p1[1] - p2[1];
+        const dz = p1[2] - p2[2];
+        const squaredError = dx * dx + dy * dy + dz * dz;
+        
+        sumSquaredErrors += squaredError;
+        validCount++;
+    }
+    
+    if (validCount === 0) return Infinity;
+    
+    // RMSE = √(mean of squared errors)
+    const meanSquaredError = sumSquaredErrors / validCount;
+    return Math.sqrt(meanSquaredError);
+}
+
+/**
+ * Compute cosine similarity between two pose frames.
+ * Cosine similarity measures the angle between two vectors (0 to 1).
+ * 
+ * We flatten the 3D landmarks into a single vector and compute cosine similarity.
+ * 
+ * Returns: 1.0 = identical poses, 0.0 = orthogonal, -1.0 = opposite
+ * For pose comparison, we typically get values between 0.5 and 1.0.
+ */
+function computeCosineSimilarity(landmarks1, landmarks2) {
+    if (!landmarks1 || !landmarks2 || landmarks1.length !== 33 || landmarks2.length !== 33) {
+        return 0;
+    }
+    
+    // Flatten landmarks into vectors (99 dimensions: 33 landmarks × 3 coordinates)
+    const vector1 = [];
+    const vector2 = [];
+    
+    for (let i = 0; i < 33; i++) {
+        const p1 = landmarks1[i];
+        const p2 = landmarks2[i];
+        
+        // Use 0 for invalid landmarks (consistent with normalization)
+        if (!p1 || isNaN(p1[0])) {
+            vector1.push(0, 0, 0);
+        } else {
+            vector1.push(p1[0], p1[1], p1[2]);
+        }
+        
+        if (!p2 || isNaN(p2[0])) {
+            vector2.push(0, 0, 0);
+        } else {
+            vector2.push(p2[0], p2[1], p2[2]);
+        }
+    }
+    
+    // Compute dot product
+    let dotProduct = 0;
+    for (let i = 0; i < vector1.length; i++) {
+        dotProduct += vector1[i] * vector2[i];
+    }
+    
+    // Compute magnitudes
+    let mag1 = 0;
+    let mag2 = 0;
+    for (let i = 0; i < vector1.length; i++) {
+        mag1 += vector1[i] * vector1[i];
+        mag2 += vector2[i] * vector2[i];
+    }
+    mag1 = Math.sqrt(mag1);
+    mag2 = Math.sqrt(mag2);
+    
+    // Avoid division by zero
+    if (mag1 === 0 || mag2 === 0) {
+        return 0;
+    }
+    
+    // Cosine similarity = dot product / (magnitude1 × magnitude2)
+    return dotProduct / (mag1 * mag2);
+}
+
+/**
  * Extract landmark series for 3D pose comparison.
  */
 function extractLandmarkSeries(shotData) {
@@ -938,6 +1039,7 @@ function computeUserCloseness(benchForm, userForm, path) {
 
 /**
  * Compute user closeness scores based on 3D landmark distances.
+ * Uses combined metrics: Euclidean distance, RMSE, and cosine similarity.
  * More accurate for pose comparison.
  */
 function computeUserClosenessLandmarks(benchLandmarks, userLandmarks, path) {
@@ -945,6 +1047,7 @@ function computeUserClosenessLandmarks(benchLandmarks, userLandmarks, path) {
     // Typical landmark distances: 0-200 pixels
     // 0 pixels = 100%, 100 pixels = 0%, 200+ pixels = 0%
     const maxDistance = 100.0; // pixels
+    const maxRMSE = 100.0; // pixels
     const userMap = {};
     
     for (const [i, j] of path) {
@@ -957,10 +1060,37 @@ function computeUserClosenessLandmarks(benchLandmarks, userLandmarks, path) {
         if (userMap[j]) {
             const iList = userMap[j];
             const iMid = iList[Math.floor(iList.length / 2)];
-            const distance = computeLandmarkDistance(userLandmarks[j], benchLandmarks[iMid]);
-            // Linear scaling: 0 pixels = 100%, 100 pixels = 0%
-            const score = Math.max(0, Math.min(100, 100 - (distance / maxDistance) * 100));
-            userCloseness.push(score);
+            
+            // Compute multiple metrics
+            const euclideanDist = computeLandmarkDistance(userLandmarks[j], benchLandmarks[iMid]);
+            const rmse = computeRMSE(userLandmarks[j], benchLandmarks[iMid]);
+            const cosineSim = computeCosineSimilarity(userLandmarks[j], benchLandmarks[iMid]);
+            
+            // Convert metrics to scores (0-100)
+            const euclideanScore = Math.max(0, Math.min(100, 100 - (euclideanDist / maxDistance) * 100));
+            const rmseScore = Math.max(0, Math.min(100, 100 - (rmse / maxRMSE) * 100));
+            const cosineScore = cosineSim * 100; // Cosine similarity is already 0-1, scale to 0-100
+            
+            // Weighted combination: 40% Euclidean, 30% RMSE, 30% Cosine Similarity
+            // Cosine similarity captures pose structure/orientation
+            // RMSE captures overall error magnitude
+            // Euclidean distance captures point-to-point differences
+            const combinedScore = (euclideanScore * 0.4) + (rmseScore * 0.3) + (cosineScore * 0.3);
+            
+            // Store metrics for debugging (first frame only)
+            if (j === 0) {
+                console.log('Frame 0 Metrics:', {
+                    euclideanDistance: euclideanDist.toFixed(2) + 'px',
+                    euclideanScore: euclideanScore.toFixed(1) + '%',
+                    rmse: rmse.toFixed(2) + 'px',
+                    rmseScore: rmseScore.toFixed(1) + '%',
+                    cosineSimilarity: cosineSim.toFixed(3),
+                    cosineScore: cosineScore.toFixed(1) + '%',
+                    combinedScore: combinedScore.toFixed(1) + '%'
+                });
+            }
+            
+            userCloseness.push(Math.max(0, Math.min(100, combinedScore)));
         } else {
             // If no match found, give a neutral score
             userCloseness.push(50);
