@@ -837,6 +837,10 @@ function computeLandmarkDistance(landmarks1, landmarks2) {
     
     let totalWeightedDistance = 0;
     let totalWeight = 0;
+    let missingCriticalLandmarks = [];
+    
+    // Critical landmarks for shooting (if missing, we should still compute but note it)
+    const criticalLandmarks = [12, 14, 16, 20]; // right shoulder, elbow, wrist, index
     
     // MediaPipe has 33 landmarks in fixed order (0-32)
     // Index i in your pose corresponds to index i in LeBron's pose
@@ -845,8 +849,17 @@ function computeLandmarkDistance(landmarks1, landmarks2) {
         const p1 = landmarks1[i];  // Your landmark at index i (normalized coordinates)
         const p2 = landmarks2[i];  // LeBron's landmark at index i (normalized coordinates)
         
+        // Check if landmark is missing
+        const p1Valid = p1 && !isNaN(p1[0]);
+        const p2Valid = p2 && !isNaN(p2[0]);
+        
+        // Track missing critical landmarks
+        if (criticalLandmarks.includes(i) && (!p1Valid || !p2Valid)) {
+            missingCriticalLandmarks.push(i);
+        }
+        
         // Skip if either landmark is invalid
-        if (!p1 || !p2 || isNaN(p1[0]) || isNaN(p2[0])) {
+        if (!p1Valid || !p2Valid) {
             continue;
         }
         
@@ -862,6 +875,13 @@ function computeLandmarkDistance(landmarks1, landmarks2) {
         const weight = getLandmarkWeight(i);
         totalWeightedDistance += distance * weight;
         totalWeight += weight;
+    }
+    
+    // If critical landmarks are missing, add a penalty but still return a value
+    if (missingCriticalLandmarks.length > 0 && totalWeight > 0) {
+        // Add penalty: 50 pixels per missing critical landmark
+        const penalty = missingCriticalLandmarks.length * 50;
+        return (totalWeightedDistance / totalWeight) + penalty;
     }
     
     // Return weighted average distance (in pixels)
@@ -882,12 +902,25 @@ function computeRMSE(landmarks1, landmarks2) {
     
     let sumWeightedSquaredErrors = 0;
     let totalWeight = 0;
+    let missingCriticalLandmarks = [];
+    
+    // Critical landmarks for shooting
+    const criticalLandmarks = [12, 14, 16, 20]; // right shoulder, elbow, wrist, index
     
     for (let i = 0; i < 33; i++) {
         const p1 = landmarks1[i];
         const p2 = landmarks2[i];
         
-        if (!p1 || !p2 || isNaN(p1[0]) || isNaN(p2[0])) {
+        const p1Valid = p1 && !isNaN(p1[0]);
+        const p2Valid = p2 && !isNaN(p2[0]);
+        
+        // Track missing critical landmarks
+        if (criticalLandmarks.includes(i) && (!p1Valid || !p2Valid)) {
+            missingCriticalLandmarks.push(i);
+        }
+        
+        // Skip if either landmark is invalid
+        if (!p1Valid || !p2Valid) {
             continue;
         }
         
@@ -906,7 +939,15 @@ function computeRMSE(landmarks1, landmarks2) {
     if (totalWeight === 0) return Infinity;
     
     // Weighted RMSE = √(weighted mean of squared errors)
-    const weightedMeanSquaredError = sumWeightedSquaredErrors / totalWeight;
+    let weightedMeanSquaredError = sumWeightedSquaredErrors / totalWeight;
+    
+    // If critical landmarks are missing, add penalty
+    if (missingCriticalLandmarks.length > 0) {
+        // Add penalty: 2500 (50^2) per missing critical landmark to squared error
+        const penalty = missingCriticalLandmarks.length * 2500;
+        weightedMeanSquaredError += penalty;
+    }
+    
     return Math.sqrt(weightedMeanSquaredError);
 }
 
@@ -929,13 +970,25 @@ function computeCosineSimilarity(landmarks1, landmarks2) {
     // Then weight by landmark importance and average
     let totalWeightedSimilarity = 0;
     let totalWeight = 0;
+    let missingCriticalLandmarks = [];
+    
+    // Critical landmarks for shooting
+    const criticalLandmarks = [12, 14, 16, 20]; // right shoulder, elbow, wrist, index
     
     for (let i = 0; i < 33; i++) {
         const p1 = landmarks1[i];
         const p2 = landmarks2[i];
         
+        const p1Valid = p1 && !isNaN(p1[0]);
+        const p2Valid = p2 && !isNaN(p2[0]);
+        
+        // Track missing critical landmarks
+        if (criticalLandmarks.includes(i) && (!p1Valid || !p2Valid)) {
+            missingCriticalLandmarks.push(i);
+        }
+        
         // Skip invalid landmarks
-        if (!p1 || !p2 || isNaN(p1[0]) || isNaN(p2[0])) {
+        if (!p1Valid || !p2Valid) {
             continue;
         }
         
@@ -961,7 +1014,16 @@ function computeCosineSimilarity(landmarks1, landmarks2) {
     if (totalWeight === 0) return 0;
     
     // Return weighted average cosine similarity across ALL landmarks
-    return totalWeightedSimilarity / totalWeight;
+    let avgSimilarity = totalWeightedSimilarity / totalWeight;
+    
+    // If critical landmarks are missing, apply penalty to similarity
+    // Each missing critical landmark reduces similarity by 0.1 (10%)
+    if (missingCriticalLandmarks.length > 0) {
+        const penalty = missingCriticalLandmarks.length * 0.1;
+        avgSimilarity = Math.max(0, avgSimilarity - penalty);
+    }
+    
+    return avgSimilarity;
 }
 
 /**
@@ -1112,6 +1174,23 @@ function computeUserClosenessLandmarks(benchLandmarks, userLandmarks, path) {
             // Compute metrics
             const rmse = computeRMSE(userLandmarks[j], benchLandmarks[iMid]);
             const cosineSim = computeCosineSimilarity(userLandmarks[j], benchLandmarks[iMid]);
+            
+            // Check for missing critical landmarks and log warning
+            const criticalLandmarks = [12, 14, 16, 20]; // right shoulder, elbow, wrist, index
+            const missingLandmarks = [];
+            for (const idx of criticalLandmarks) {
+                const userLandmark = userLandmarks[j][idx];
+                const benchLandmark = benchLandmarks[iMid][idx];
+                if (!userLandmark || isNaN(userLandmark[0]) || !benchLandmark || isNaN(benchLandmark[0])) {
+                    const landmarkNames = {12: 'right shoulder', 14: 'right elbow', 16: 'right wrist', 20: 'right index'};
+                    missingLandmarks.push(landmarkNames[idx]);
+                }
+            }
+            
+            if (missingLandmarks.length > 0 && j === 0) {
+                console.warn('⚠️ Missing critical landmarks in frame 0:', missingLandmarks.join(', '));
+                console.warn('   Score may be lower due to missing landmarks. Try to ensure good camera angle and lighting.');
+            }
             
             // Cosine similarity: 0.0 to 1.0, where:
             // - 1.0 = identical poses
