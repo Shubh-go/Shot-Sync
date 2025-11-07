@@ -1,27 +1,17 @@
 #!/usr/bin/env python3
 """
-Process video files to extract professional player shot data.
-This script processes video files and extracts pose data in the same format
-as the app's recording system.
-
-Usage:
-    python process_player_video.py <video_file> <player_name>
-    
-Example:
-    python process_player_video.py curry_shot.mp4 curry
+Extract pose data from specific video frames (130-148) for LeBron.
 """
 
 import cv2
 import mediapipe as mp
 import numpy as np
 import json
-import sys
 import os
 from pathlib import Path
 
 # MediaPipe setup
 mp_pose = mp.solutions.pose
-mp_drawing = mp.solutions.drawing_utils
 
 pose = mp_pose.Pose(
     model_complexity=2,
@@ -31,8 +21,6 @@ pose = mp_pose.Pose(
     min_tracking_confidence=0.7
 )
 
-# ====================== UTILITY FUNCTIONS ======================
-
 def get_3d_point(landmarks, index, width, height):
     """Extract 3D point from MediaPipe landmarks."""
     if index >= len(landmarks) or landmarks[index].visibility < 0.5:
@@ -40,7 +28,7 @@ def get_3d_point(landmarks, index, width, height):
     return [
         landmarks[index].x * width,
         landmarks[index].y * height,
-        landmarks[index].z * width  # Scale z by width for consistency
+        landmarks[index].z * width
     ]
 
 def calculate_angle(a, b, c):
@@ -159,12 +147,11 @@ def get_arm_state(landmarks, width, height):
 
     return "neutral"
 
-# ====================== VIDEO PROCESSING ======================
-
-def process_video(video_path, player_name):
-    """Process video file and extract shot data."""
+def process_frames_130_148(video_path, player_name):
+    """Process only frames 130-148 from video."""
     print(f"Processing video: {video_path}")
     print(f"Player: {player_name}")
+    print(f"Extracting frames: 130-148 (19 frames)")
     
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -178,21 +165,23 @@ def process_video(video_path, player_name):
     print(f"Video properties: {width}x{height} @ {fps} fps")
     
     pose_data = []
-    previous_stage = "neutral"
-    recording_active = False
-    seen_follow_through = False
-    start_time = None
-    frame_count = 0
+    start_frame = 130
+    end_frame = 148
     
-    print("\nProcessing frames...")
+    print(f"\nSeeking to frame {start_frame}...")
     
-    while cap.isOpened():
+    # Seek to frame 130
+    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+    
+    print("Processing frames 130-148...")
+    
+    for frame_idx in range(start_frame, end_frame + 1):
         ret, frame = cap.read()
         if not ret:
+            print(f"Warning: Could not read frame {frame_idx}")
             break
         
-        frame_count += 1
-        current_time = frame_count / fps
+        current_time = (frame_idx - start_frame) / fps
         
         # Convert BGR to RGB
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -222,124 +211,71 @@ def process_video(video_path, player_name):
             # Normalize pose orientation (align shoulders with x-axis)
             landmarks3D = normalize_pose_orientation(landmarks3D)
             
-            # State machine logic (same as app.js)
-            if state != previous_stage:
-                if state == "pre_shot" and not recording_active:
-                    recording_active = True
-                    seen_follow_through = False
-                    start_time = current_time
-                    pose_data = []  # Reset data when starting new recording
-                elif state == "neutral" and recording_active and not seen_follow_through:
-                    recording_active = False
-                    seen_follow_through = False
-                    start_time = None
-                    pose_data = []
-                elif state == "follow_through" and recording_active:
-                    seen_follow_through = True
-                elif state == "pre_shot" and recording_active and seen_follow_through:
-                    # Shot completed
-                    elapsed = current_time - start_time
-                    pose_data.append({
-                        'state': state,
-                        'time': elapsed,
-                        'elbow_angle': float(elbow_angle) if elbow_angle else None,
-                        'wrist_angle': float(wrist_angle) if wrist_angle else None,
-                        'arm_angle': float(arm_angle) if arm_angle else None,
-                        'landmarks': landmarks3D
-                    })
-                    break  # Shot complete, stop processing
-                previous_stage = state
+            pose_data.append({
+                'state': state,
+                'time': current_time,
+                'elbow_angle': float(elbow_angle) if elbow_angle else None,
+                'wrist_angle': float(wrist_angle) if wrist_angle else None,
+                'arm_angle': float(arm_angle) if arm_angle else None,
+                'landmarks': landmarks3D
+            })
             
-            # Record frames while actively recording
-            if recording_active:
-                elapsed = current_time - start_time
-                pose_data.append({
-                    'state': state,
-                    'time': elapsed,
-                    'elbow_angle': float(elbow_angle) if elbow_angle else None,
-                    'wrist_angle': float(wrist_angle) if wrist_angle else None,
-                    'arm_angle': float(arm_angle) if arm_angle else None,
-                    'landmarks': landmarks3D
-                })
-        
-        # Progress indicator
-        if frame_count % 30 == 0:
-            print(f"  Processed {frame_count} frames...", end='\r')
+            if (frame_idx - start_frame) % 5 == 0:
+                print(f"  Processed frame {frame_idx}...")
+        else:
+            # Still add data point even if pose not detected
+            pose_data.append({
+                'state': 'neutral',
+                'time': current_time,
+                'elbow_angle': None,
+                'wrist_angle': None,
+                'arm_angle': None,
+                'landmarks': [[np.nan, np.nan, np.nan]] * 33
+            })
     
     cap.release()
-    print(f"\n\nProcessed {frame_count} frames")
-    print(f"Extracted {len(pose_data)} data points")
     
-    if len(pose_data) == 0:
-        print("Warning: No shot data extracted. Make sure the video shows a clear shooting motion.")
-        return None
+    print(f"\nExtracted {len(pose_data)} data points from frames 130-148")
+    
+    # Save data
+    output_dir = Path('player_data')
+    output_dir.mkdir(exist_ok=True)
+    
+    json_path = output_dir / f'{player_name}_benchmark.json'
+    js_path = output_dir / f'{player_name}_benchmark.js'
+    
+    with open(json_path, 'w') as f:
+        json.dump(pose_data, f, indent=2)
+    
+    js_content = f"// {player_name.upper()} benchmark data (frames 130-148 - shooting motion)\n"
+    js_content += f"const lebron_data = " + json.dumps(pose_data, indent=2) + ";\n"
+    
+    with open(js_path, 'w') as f:
+        f.write(js_content)
+    
+    print(f"\n✅ Data saved to: {json_path}")
+    print(f"✅ JavaScript saved to: {js_path}")
+    
+    # Show stats
+    valid_angles = [d for d in pose_data if d['elbow_angle'] is not None]
+    print(f"\nStats:")
+    print(f"  Total frames: {len(pose_data)}")
+    print(f"  Frames with valid angles: {len(valid_angles)}")
+    if valid_angles:
+        elbow_angles = [d['elbow_angle'] for d in valid_angles]
+        print(f"  Elbow angle range: {min(elbow_angles):.1f}° - {max(elbow_angles):.1f}°")
+        print(f"  Average elbow angle: {sum(elbow_angles)/len(elbow_angles):.1f}°")
     
     return pose_data
 
-def save_player_data(data, player_name, output_dir="player_data"):
-    """Save extracted data to JSON file."""
-    os.makedirs(output_dir, exist_ok=True)
-    output_file = os.path.join(output_dir, f"{player_name}_benchmark.json")
-    
-    with open(output_file, 'w') as f:
-        json.dump(data, f, indent=2)
-    
-    print(f"\nData saved to: {output_file}")
-    return output_file
-
-def convert_to_js_format(json_file, player_name):
-    """Convert JSON data to JavaScript format for app.js."""
-    with open(json_file, 'r') as f:
-        data = json.load(f)
-    
-    # Convert to JavaScript array format
-    js_code = f"// {player_name.upper()} benchmark data\n"
-    js_code += f"const {player_name}_data = {json.dumps(data, indent=2)};\n"
-    
-    output_file = json_file.replace('.json', '.js')
-    with open(output_file, 'w') as f:
-        f.write(js_code)
-    
-    print(f"JavaScript format saved to: {output_file}")
-    return output_file
-
-# ====================== MAIN ======================
-
-def main():
-    if len(sys.argv) < 3:
-        print("Usage: python process_player_video.py <video_file> <player_name>")
-        print("\nExample:")
-        print("  python process_player_video.py curry_shot.mp4 curry")
-        print("\nPlayer names: curry, lebron, jordan, durant, clark")
-        sys.exit(1)
-    
-    video_path = sys.argv[1]
-    player_name = sys.argv[2]
+if __name__ == "__main__":
+    video_path = "lebron_shot.mp4"
+    player_name = "lebron"
     
     if not os.path.exists(video_path):
         print(f"Error: Video file not found: {video_path}")
-        sys.exit(1)
+        exit(1)
     
-    # Process video
-    data = process_video(video_path, player_name)
-    
-    if data is None:
-        print("\nFailed to extract data from video.")
-        sys.exit(1)
-    
-    # Save data
-    json_file = save_player_data(data, player_name)
-    js_file = convert_to_js_format(json_file, player_name)
-    
-    print("\n" + "="*60)
-    print("SUCCESS! Data extracted and saved.")
-    print("="*60)
-    print(f"\nTo use this data in your app:")
-    print(f"1. Open {js_file}")
-    print(f"2. Copy the data array")
-    print(f"3. Replace the data in app.js for {player_name} in initializeProPlayerBenchmarks()")
-    print("\nOr manually update the proPlayerBenchmarks object in app.js")
-
-if __name__ == "__main__":
-    main()
+    process_frames_130_148(video_path, player_name)
+    print("\n✅ Complete! LeBron's data now uses frames 130-148 only.")
 

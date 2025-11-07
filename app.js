@@ -110,7 +110,7 @@ function initializeProPlayerBenchmarks() {
             proPlayerBenchmarks[player] = window.lebron_benchmark_data;
             console.log(`Loaded real LeBron data: ${proPlayerBenchmarks[player].length} frames`);
         } else {
-            proPlayerBenchmarks[player] = generateExampleBenchmarkData();
+        proPlayerBenchmarks[player] = generateExampleBenchmarkData();
         }
     });
 }
@@ -229,6 +229,90 @@ function calculateAngle(a, b, c) {
     return Math.acos(cosine) * (180 / Math.PI);
 }
 
+/**
+ * Normalize pose landmarks to align shoulders with x-axis.
+ * This ensures consistent orientation regardless of camera angle.
+ * 
+ * @param {Array} landmarks - Array of 33 [x, y, z] points
+ * @returns {Array} Normalized landmarks array
+ */
+function normalizePoseOrientation(landmarks) {
+    if (!landmarks || landmarks.length < 33) {
+        return landmarks;
+    }
+    
+    // Get shoulder points (MediaPipe indices: 11 = left shoulder, 12 = right shoulder)
+    const leftShoulder = landmarks[11];
+    const rightShoulder = landmarks[12];
+    
+    // Check if shoulders are valid
+    if (!leftShoulder || !rightShoulder || 
+        isNaN(leftShoulder[0]) || isNaN(rightShoulder[0])) {
+        return landmarks; // Return original if shoulders not detected
+    }
+    
+    // Calculate shoulder vector (from left to right shoulder)
+    const shoulderVec = [
+        rightShoulder[0] - leftShoulder[0],
+        rightShoulder[1] - leftShoulder[1],
+        rightShoulder[2] - leftShoulder[2]
+    ];
+    
+    // Project to XZ plane (ignore Y for rotation calculation)
+    const shoulderVecXZ = [shoulderVec[0], shoulderVec[2]];
+    const shoulderMag = Math.sqrt(shoulderVecXZ[0] ** 2 + shoulderVecXZ[1] ** 2);
+    
+    if (shoulderMag < 1e-5) {
+        return landmarks; // Shoulders too close, can't determine orientation
+    }
+    
+    // Calculate angle to rotate shoulder vector to align with +X axis
+    // Target: [1, 0] in XZ plane
+    const targetVec = [1, 0];
+    const currentVec = [shoulderVecXZ[0] / shoulderMag, shoulderVecXZ[1] / shoulderMag];
+    
+    // Calculate rotation angle (around Y-axis)
+    const cosAngle = currentVec[0] * targetVec[0] + currentVec[1] * targetVec[1];
+    const sinAngle = currentVec[0] * targetVec[1] - currentVec[1] * targetVec[0];
+    const angle = Math.atan2(sinAngle, cosAngle);
+    
+    // Rotation matrix for rotation around Y-axis
+    const cos = Math.cos(-angle); // Negative to align with +X
+    const sin = Math.sin(-angle);
+    
+    // Calculate shoulder midpoint for translation
+    const shoulderMidpoint = [
+        (leftShoulder[0] + rightShoulder[0]) / 2,
+        (leftShoulder[1] + rightShoulder[1]) / 2,
+        (leftShoulder[2] + rightShoulder[2]) / 2
+    ];
+    
+    // Apply rotation and translation to all landmarks
+    const normalized = landmarks.map(landmark => {
+        if (!landmark || isNaN(landmark[0])) {
+            return [NaN, NaN, NaN];
+        }
+        
+        // Translate to origin (using shoulder midpoint)
+        const translated = [
+            landmark[0] - shoulderMidpoint[0],
+            landmark[1] - shoulderMidpoint[1],
+            landmark[2] - shoulderMidpoint[2]
+        ];
+        
+        // Rotate around Y-axis
+        const rotated = [
+            translated[0] * cos - translated[2] * sin,
+            translated[1],
+            translated[0] * sin + translated[2] * cos
+        ];
+        
+        return rotated;
+    });
+    
+    return normalized;
+}
+
 function getArmState(landmarks, width, height) {
     const rightShoulder = get3DPoint(landmarks, 12, width, height);
     const rightElbow = get3DPoint(landmarks, 14, width, height);
@@ -342,6 +426,9 @@ async function startBenchmarkRecording() {
                     landmarks3D.push(pt || [NaN, NaN, NaN]);
                 }
                 
+                // Normalize pose orientation (align shoulders with x-axis)
+                const normalizedLandmarks = normalizePoseOrientation(landmarks3D);
+                
                 // Stage transitions
                 if (state !== previousStage) {
                     if (state === "pre_shot" && !recordingActive) {
@@ -365,7 +452,7 @@ async function startBenchmarkRecording() {
                             elbow_angle: elbowAngle,
                             wrist_angle: wristAngle,
                             arm_angle: armAngle,
-                            landmarks: landmarks3D
+                            landmarks: normalizedLandmarks
                         });
                         stopBenchmarkRecording();
                         return;
@@ -382,7 +469,7 @@ async function startBenchmarkRecording() {
                         elbow_angle: elbowAngle,
                         wrist_angle: wristAngle,
                         arm_angle: armAngle,
-                        landmarks: landmarks3D
+                        landmarks: normalizedLandmarks
                     });
                     
                     if (state === "pre_shot" || state === "follow_through") {
@@ -515,6 +602,9 @@ async function startUserRecording() {
                     landmarks3D.push(pt || [NaN, NaN, NaN]);
                 }
                 
+                // Normalize pose orientation (align shoulders with x-axis)
+                const normalizedLandmarks = normalizePoseOrientation(landmarks3D);
+                
                 if (state !== previousStage) {
                     if (state === "pre_shot" && !recordingActive) {
                         recordingActive = true;
@@ -537,7 +627,7 @@ async function startUserRecording() {
                             elbow_angle: elbowAngle,
                             wrist_angle: wristAngle,
                             arm_angle: armAngle,
-                            landmarks: landmarks3D
+                            landmarks: normalizedLandmarks
                         });
                         stopUserRecording();
                         return;
@@ -553,7 +643,7 @@ async function startUserRecording() {
                         elbow_angle: elbowAngle,
                         wrist_angle: wristAngle,
                         arm_angle: armAngle,
-                        landmarks: landmarks3D
+                        landmarks: normalizedLandmarks
                     });
                     
                     if (state === "pre_shot" || state === "follow_through") {
@@ -1127,7 +1217,7 @@ function displayDetailedFeedback(feedback, playerName) {
                 console.log('Found detailedFeedback element on retry');
                 detailedFeedbackSection.style.display = 'block';
                 populateFeedbackContent(feedback, playerName);
-            } else {
+    } else {
                 console.error('detailedFeedback element still not found after retry');
             }
         }, 200);
