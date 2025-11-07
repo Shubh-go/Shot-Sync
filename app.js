@@ -1095,11 +1095,17 @@ function computeUserCloseness(benchForm, userForm, path) {
  */
 function computeUserClosenessLandmarks(benchLandmarks, userLandmarks, path) {
     // Normalize distance to similarity score
-    // Typical landmark distances: 0-200 pixels
-    // 0 pixels = 100%, 100 pixels = 0%, 200+ pixels = 0%
-    const maxDistance = 100.0; // pixels
-    const maxRMSE = 100.0; // pixels
+    // With weighted landmarks and normalized coordinates, typical distances are 50-300 pixels
+    // Adjusted thresholds to be more realistic:
+    // - 0 pixels = 100% similarity
+    // - 150 pixels = 50% similarity (reasonable difference)
+    // - 300 pixels = 0% similarity (very different)
+    const maxDistance = 300.0; // pixels (increased from 100)
+    const maxRMSE = 300.0; // pixels (increased from 100)
     const userMap = {};
+    
+    // Track all metrics for debugging
+    const allMetrics = [];
     
     for (const [i, j] of path) {
         if (!userMap[j]) userMap[j] = [];
@@ -1117,29 +1123,29 @@ function computeUserClosenessLandmarks(benchLandmarks, userLandmarks, path) {
             const rmse = computeRMSE(userLandmarks[j], benchLandmarks[iMid]);
             const cosineSim = computeCosineSimilarity(userLandmarks[j], benchLandmarks[iMid]);
             
-            // Convert metrics to scores (0-100)
-            const euclideanScore = Math.max(0, Math.min(100, 100 - (euclideanDist / maxDistance) * 100));
-            const rmseScore = Math.max(0, Math.min(100, 100 - (rmse / maxRMSE) * 100));
+            // Convert metrics to scores (0-100) using more lenient thresholds
+            // Use a smoother curve: score = 100 * (1 - (dist/maxDist)^0.7)
+            // This gives more credit for being close and less harsh penalty for being far
+            const euclideanScore = Math.max(0, Math.min(100, 100 * Math.pow(1 - Math.min(1, euclideanDist / maxDistance), 0.7)));
+            const rmseScore = Math.max(0, Math.min(100, 100 * Math.pow(1 - Math.min(1, rmse / maxRMSE), 0.7)));
             const cosineScore = cosineSim * 100; // Cosine similarity is already 0-1, scale to 0-100
             
-            // Weighted combination: 40% Euclidean, 30% RMSE, 30% Cosine Similarity
-            // Cosine similarity captures pose structure/orientation
-            // RMSE captures overall error magnitude
-            // Euclidean distance captures point-to-point differences
-            const combinedScore = (euclideanScore * 0.4) + (rmseScore * 0.3) + (cosineScore * 0.3);
+            // Weighted combination: 30% Euclidean, 20% RMSE, 50% Cosine Similarity
+            // Cosine similarity is most reliable for pose structure
+            // Euclidean and RMSE capture positional differences
+            const combinedScore = (euclideanScore * 0.3) + (rmseScore * 0.2) + (cosineScore * 0.5);
             
-            // Store metrics for debugging (first frame only)
-            if (j === 0) {
-                console.log('Frame 0 Metrics:', {
-                    euclideanDistance: euclideanDist.toFixed(2) + 'px',
-                    euclideanScore: euclideanScore.toFixed(1) + '%',
-                    rmse: rmse.toFixed(2) + 'px',
-                    rmseScore: rmseScore.toFixed(1) + '%',
-                    cosineSimilarity: cosineSim.toFixed(3),
-                    cosineScore: cosineScore.toFixed(1) + '%',
-                    combinedScore: combinedScore.toFixed(1) + '%'
-                });
-            }
+            // Store metrics for all frames
+            allMetrics.push({
+                frame: j,
+                euclideanDist: euclideanDist,
+                rmse: rmse,
+                cosineSim: cosineSim,
+                euclideanScore: euclideanScore,
+                rmseScore: rmseScore,
+                cosineScore: cosineScore,
+                combinedScore: combinedScore
+            });
             
             userCloseness.push(Math.max(0, Math.min(100, combinedScore)));
         } else {
@@ -1147,6 +1153,32 @@ function computeUserClosenessLandmarks(benchLandmarks, userLandmarks, path) {
             userCloseness.push(50);
         }
     }
+    
+    // Log summary statistics
+    if (allMetrics.length > 0) {
+        const avgEuclidean = allMetrics.reduce((sum, m) => sum + m.euclideanDist, 0) / allMetrics.length;
+        const avgRMSE = allMetrics.reduce((sum, m) => sum + m.rmse, 0) / allMetrics.length;
+        const avgCosine = allMetrics.reduce((sum, m) => sum + m.cosineSim, 0) / allMetrics.length;
+        const avgCombined = userCloseness.reduce((a, b) => a + b, 0) / userCloseness.length;
+        
+        console.log('Comparison Summary:', {
+            totalFrames: allMetrics.length,
+            avgEuclideanDistance: avgEuclidean.toFixed(2) + 'px',
+            avgRMSE: avgRMSE.toFixed(2) + 'px',
+            avgCosineSimilarity: avgCosine.toFixed(3),
+            avgCombinedScore: avgCombined.toFixed(1) + '%',
+            minScore: Math.min(...userCloseness).toFixed(1) + '%',
+            maxScore: Math.max(...userCloseness).toFixed(1) + '%'
+        });
+        
+        // Log first and middle frame details
+        console.log('Frame 0 Details:', allMetrics[0]);
+        if (allMetrics.length > 1) {
+            const midFrame = Math.floor(allMetrics.length / 2);
+            console.log(`Frame ${midFrame} Details:`, allMetrics[midFrame]);
+        }
+    }
+    
     return userCloseness;
 }
 
