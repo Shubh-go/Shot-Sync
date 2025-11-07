@@ -1027,12 +1027,143 @@ function computeCosineSimilarity(landmarks1, landmarks2) {
 }
 
 /**
+ * Interpolate missing landmarks using linear interpolation.
+ * If a landmark disappears and reappears, fill in the gap linearly.
+ * 
+ * @param {Array} shotData - Array of pose data entries
+ * @returns {Array} Shot data with interpolated landmarks
+ */
+function interpolateMissingLandmarks(shotData) {
+    if (!shotData || shotData.length === 0) return shotData;
+    
+    const interpolated = JSON.parse(JSON.stringify(shotData)); // Deep copy
+    
+    // For each landmark index (0-32)
+    for (let landmarkIdx = 0; landmarkIdx < 33; landmarkIdx++) {
+        let lastValidFrame = null;
+        let gapStart = null;
+        
+        for (let frameIdx = 0; frameIdx < interpolated.length; frameIdx++) {
+            const frame = interpolated[frameIdx];
+            const landmark = frame.landmarks && frame.landmarks[landmarkIdx];
+            const isValid = landmark && !isNaN(landmark[0]);
+            
+            if (isValid) {
+                // Landmark is valid
+                if (gapStart !== null) {
+                    // We were in a gap, now we have a valid landmark - interpolate!
+                    const gapEnd = frameIdx;
+                    const gapLength = gapEnd - gapStart;
+                    
+                    if (lastValidFrame !== null && gapLength > 0) {
+                        const startLandmark = interpolated[lastValidFrame].landmarks[landmarkIdx];
+                        const endLandmark = landmark;
+                        
+                        // Linear interpolation for each coordinate
+                        for (let gapIdx = 1; gapIdx <= gapLength; gapIdx++) {
+                            const t = gapIdx / (gapLength + 1); // 0 to 1
+                            const interpolatedFrame = interpolated[gapStart + gapIdx - 1];
+                            
+                            if (!interpolatedFrame.landmarks) {
+                                interpolatedFrame.landmarks = Array(33).fill(null).map(() => [NaN, NaN, NaN]);
+                            }
+                            
+                            interpolatedFrame.landmarks[landmarkIdx] = [
+                                startLandmark[0] + (endLandmark[0] - startLandmark[0]) * t,
+                                startLandmark[1] + (endLandmark[1] - startLandmark[1]) * t,
+                                startLandmark[2] + (endLandmark[2] - startLandmark[2]) * t
+                            ];
+                        }
+                    }
+                    
+                    gapStart = null;
+                }
+                lastValidFrame = frameIdx;
+            } else {
+                // Landmark is missing
+                if (lastValidFrame !== null && gapStart === null) {
+                    // Start of a new gap
+                    gapStart = frameIdx;
+                }
+                // If gapStart is null and lastValidFrame is null, landmark was never seen - skip
+            }
+        }
+        
+        // If gap extends to the end, extrapolate from last valid frame
+        if (gapStart !== null && lastValidFrame !== null) {
+            const lastValidLandmark = interpolated[lastValidFrame].landmarks[landmarkIdx];
+            for (let frameIdx = gapStart; frameIdx < interpolated.length; frameIdx++) {
+                if (!interpolated[frameIdx].landmarks) {
+                    interpolated[frameIdx].landmarks = Array(33).fill(null).map(() => [NaN, NaN, NaN]);
+                }
+                // Use last known position (no extrapolation, just copy)
+                interpolated[frameIdx].landmarks[landmarkIdx] = [...lastValidLandmark];
+            }
+        }
+    }
+    
+    // Also interpolate angles if they're missing
+    for (let frameIdx = 0; frameIdx < interpolated.length; frameIdx++) {
+        const frame = interpolated[frameIdx];
+        const angleFields = ['elbow_angle', 'wrist_angle', 'arm_angle'];
+        
+        for (const angleField of angleFields) {
+            if (frame[angleField] === null || frame[angleField] === undefined || isNaN(frame[angleField])) {
+                // Find last valid and next valid angle
+                let lastValid = null;
+                let nextValid = null;
+                let lastIdx = null;
+                let nextIdx = null;
+                
+                // Look backwards
+                for (let i = frameIdx - 1; i >= 0; i--) {
+                    const val = interpolated[i][angleField];
+                    if (val !== null && val !== undefined && !isNaN(val)) {
+                        lastValid = val;
+                        lastIdx = i;
+                        break;
+                    }
+                }
+                
+                // Look forwards
+                for (let i = frameIdx + 1; i < interpolated.length; i++) {
+                    const val = interpolated[i][angleField];
+                    if (val !== null && val !== undefined && !isNaN(val)) {
+                        nextValid = val;
+                        nextIdx = i;
+                        break;
+                    }
+                }
+                
+                // Interpolate if we have both
+                if (lastValid !== null && nextValid !== null && lastIdx !== null && nextIdx !== null) {
+                    const t = (frameIdx - lastIdx) / (nextIdx - lastIdx);
+                    frame[angleField] = lastValid + (nextValid - lastValid) * t;
+                } else if (lastValid !== null) {
+                    // Extrapolate from last valid (or just use it)
+                    frame[angleField] = lastValid;
+                } else if (nextValid !== null) {
+                    // Use next valid
+                    frame[angleField] = nextValid;
+                }
+            }
+        }
+    }
+    
+    return interpolated;
+}
+
+/**
  * Extract landmark series for 3D pose comparison.
+ * Applies interpolation to fill in missing landmarks.
  */
 function extractLandmarkSeries(shotData) {
+    // First, interpolate missing landmarks
+    const interpolatedData = interpolateMissingLandmarks(shotData);
+    
     const times = [];
     const landmarkFrames = [];
-    for (const entry of shotData) {
+    for (const entry of interpolatedData) {
         if (entry.landmarks && entry.landmarks.length === 33) {
             times.push(entry.time);
             landmarkFrames.push(entry.landmarks);
