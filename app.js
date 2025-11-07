@@ -1094,14 +1094,8 @@ function computeUserCloseness(benchForm, userForm, path) {
  * More accurate for pose comparison.
  */
 function computeUserClosenessLandmarks(benchLandmarks, userLandmarks, path) {
-    // Normalize distance to similarity score
-    // With weighted landmarks and normalized coordinates, typical distances are 50-300 pixels
-    // Adjusted thresholds to be more realistic:
-    // - 0 pixels = 100% similarity
-    // - 150 pixels = 50% similarity (reasonable difference)
-    // - 300 pixels = 0% similarity (very different)
-    const maxDistance = 300.0; // pixels (increased from 100)
-    const maxRMSE = 300.0; // pixels (increased from 100)
+    // Simplified scoring: Use primarily cosine similarity with RMSE as a minor adjustment
+    // Cosine similarity is most reliable for pose structure comparison
     const userMap = {};
     
     // Track all metrics for debugging
@@ -1118,36 +1112,69 @@ function computeUserClosenessLandmarks(benchLandmarks, userLandmarks, path) {
             const iList = userMap[j];
             const iMid = iList[Math.floor(iList.length / 2)];
             
-            // Compute multiple metrics
-            const euclideanDist = computeLandmarkDistance(userLandmarks[j], benchLandmarks[iMid]);
+            // Compute metrics
             const rmse = computeRMSE(userLandmarks[j], benchLandmarks[iMid]);
             const cosineSim = computeCosineSimilarity(userLandmarks[j], benchLandmarks[iMid]);
             
-            // Convert metrics to scores (0-100) using more lenient thresholds
-            // Use a smoother curve: score = 100 * (1 - (dist/maxDist)^0.7)
-            // This gives more credit for being close and less harsh penalty for being far
-            const euclideanScore = Math.max(0, Math.min(100, 100 * Math.pow(1 - Math.min(1, euclideanDist / maxDistance), 0.7)));
-            const rmseScore = Math.max(0, Math.min(100, 100 * Math.pow(1 - Math.min(1, rmse / maxRMSE), 0.7)));
-            const cosineScore = cosineSim * 100; // Cosine similarity is already 0-1, scale to 0-100
+            // Cosine similarity: 0.0 to 1.0, where:
+            // - 1.0 = identical poses
+            // - 0.9+ = very similar
+            // - 0.7-0.9 = similar
+            // - 0.5-0.7 = somewhat similar
+            // - <0.5 = different
             
-            // Weighted combination: 30% Euclidean, 20% RMSE, 50% Cosine Similarity
-            // Cosine similarity is most reliable for pose structure
-            // Euclidean and RMSE capture positional differences
-            const combinedScore = (euclideanScore * 0.3) + (rmseScore * 0.2) + (cosineScore * 0.5);
+            // Convert cosine similarity to score with lenient scaling:
+            // - 0.95+ = 100% (near perfect)
+            // - 0.85 = 90% (very good)
+            // - 0.75 = 75% (good)
+            // - 0.65 = 60% (decent)
+            // - 0.50 = 40% (needs work)
+            // - 0.30 = 20% (very different)
+            let cosineScore;
+            if (cosineSim >= 0.95) {
+                cosineScore = 100;
+            } else if (cosineSim >= 0.85) {
+                // 0.85-0.95: map to 80-100%
+                cosineScore = 80 + ((cosineSim - 0.85) / 0.1) * 20;
+            } else if (cosineSim >= 0.75) {
+                // 0.75-0.85: map to 60-80%
+                cosineScore = 60 + ((cosineSim - 0.75) / 0.1) * 20;
+            } else if (cosineSim >= 0.65) {
+                // 0.65-0.75: map to 45-60%
+                cosineScore = 45 + ((cosineSim - 0.65) / 0.1) * 15;
+            } else if (cosineSim >= 0.50) {
+                // 0.50-0.65: map to 25-45%
+                cosineScore = 25 + ((cosineSim - 0.50) / 0.15) * 20;
+            } else {
+                // <0.50: map to 0-25%
+                cosineScore = Math.max(0, (cosineSim / 0.50) * 25);
+            }
+            
+            // RMSE adjustment: Use as a minor penalty/bonus
+            // Typical RMSE values: 50-300 pixels for similar shots
+            // If RMSE is very high (>400px), apply small penalty
+            // If RMSE is low (<100px), apply small bonus
+            let rmseAdjustment = 0;
+            if (rmse > 400) {
+                rmseAdjustment = -10; // Penalty for very high RMSE
+            } else if (rmse < 100) {
+                rmseAdjustment = +5; // Bonus for low RMSE
+            }
+            
+            // Final score: primarily cosine similarity with small RMSE adjustment
+            const finalScore = Math.max(0, Math.min(100, cosineScore + rmseAdjustment));
             
             // Store metrics for all frames
             allMetrics.push({
                 frame: j,
-                euclideanDist: euclideanDist,
                 rmse: rmse,
                 cosineSim: cosineSim,
-                euclideanScore: euclideanScore,
-                rmseScore: rmseScore,
                 cosineScore: cosineScore,
-                combinedScore: combinedScore
+                rmseAdjustment: rmseAdjustment,
+                finalScore: finalScore
             });
             
-            userCloseness.push(Math.max(0, Math.min(100, combinedScore)));
+            userCloseness.push(finalScore);
         } else {
             // If no match found, give a neutral score
             userCloseness.push(50);
@@ -1156,17 +1183,15 @@ function computeUserClosenessLandmarks(benchLandmarks, userLandmarks, path) {
     
     // Log summary statistics
     if (allMetrics.length > 0) {
-        const avgEuclidean = allMetrics.reduce((sum, m) => sum + m.euclideanDist, 0) / allMetrics.length;
         const avgRMSE = allMetrics.reduce((sum, m) => sum + m.rmse, 0) / allMetrics.length;
         const avgCosine = allMetrics.reduce((sum, m) => sum + m.cosineSim, 0) / allMetrics.length;
-        const avgCombined = userCloseness.reduce((a, b) => a + b, 0) / userCloseness.length;
+        const avgFinal = userCloseness.reduce((a, b) => a + b, 0) / userCloseness.length;
         
         console.log('Comparison Summary:', {
             totalFrames: allMetrics.length,
-            avgEuclideanDistance: avgEuclidean.toFixed(2) + 'px',
             avgRMSE: avgRMSE.toFixed(2) + 'px',
             avgCosineSimilarity: avgCosine.toFixed(3),
-            avgCombinedScore: avgCombined.toFixed(1) + '%',
+            avgFinalScore: avgFinal.toFixed(1) + '%',
             minScore: Math.min(...userCloseness).toFixed(1) + '%',
             maxScore: Math.max(...userCloseness).toFixed(1) + '%'
         });
