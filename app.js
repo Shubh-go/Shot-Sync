@@ -748,6 +748,20 @@ function extractFormSeries(shotData) {
 /**
  * Compute 3D landmark distance between two pose frames.
  * Returns the average Euclidean distance across all valid landmarks.
+ * 
+ * MediaPipe landmark indices (key for shooting):
+ * - 11: Left Shoulder
+ * - 12: Right Shoulder
+ * - 13: Left Elbow
+ * - 14: Right Elbow
+ * - 15: Left Wrist
+ * - 16: Right Wrist (shooting hand)
+ * - 20: Right Index (shooting finger)
+ * 
+ * This function compares corresponding landmarks:
+ * - Your landmarks[16] (right wrist) vs LeBron's landmarks[16] (right wrist)
+ * - Your landmarks[14] (right elbow) vs LeBron's landmarks[14] (right elbow)
+ * etc.
  */
 function computeLandmarkDistance(landmarks1, landmarks2) {
     if (!landmarks1 || !landmarks2 || landmarks1.length !== 33 || landmarks2.length !== 33) {
@@ -757,16 +771,19 @@ function computeLandmarkDistance(landmarks1, landmarks2) {
     let totalDistance = 0;
     let validCount = 0;
     
+    // MediaPipe has 33 landmarks in fixed order (0-32)
+    // Index i in your pose corresponds to index i in LeBron's pose
     for (let i = 0; i < 33; i++) {
-        const p1 = landmarks1[i];
-        const p2 = landmarks2[i];
+        const p1 = landmarks1[i];  // Your landmark at index i
+        const p2 = landmarks2[i];  // LeBron's landmark at index i (same body part)
         
         // Skip if either landmark is invalid
         if (!p1 || !p2 || isNaN(p1[0]) || isNaN(p2[0])) {
             continue;
         }
         
-        // Calculate 3D Euclidean distance
+        // Calculate 3D Euclidean distance between corresponding landmarks
+        // p1 and p2 are both [x, y, z] coordinates
         const dx = p1[0] - p2[0];
         const dy = p1[1] - p2[1];
         const dz = p1[2] - p2[2];
@@ -776,6 +793,7 @@ function computeLandmarkDistance(landmarks1, landmarks2) {
         validCount++;
     }
     
+    // Return average distance across all valid landmarks
     return validCount > 0 ? totalDistance / validCount : Infinity;
 }
 
