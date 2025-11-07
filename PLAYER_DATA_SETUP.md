@@ -5,10 +5,32 @@ This guide explains how to extract real shot data from video clips of profession
 ## Overview
 
 To add real professional player data, you need to:
-1. Find video clips of players shooting
+1. Find video clips of players shooting (or download from YouTube)
 2. Process the videos through MediaPipe pose detection
 3. Extract the shot data in the same format as the app
 4. Add the data to the app
+
+## Quick Start: Download from YouTube
+
+If you have a YouTube URL (like a YouTube Short), you can download and process it in one step:
+
+```bash
+# Install yt-dlp if you haven't already
+pip install yt-dlp
+
+# Download and process in one command
+./download_and_process.sh <youtube_url> <player_name>
+```
+
+**Example:**
+```bash
+./download_and_process.sh https://youtube.com/shorts/AYDPw7LJL8k?si=I3cjJYSVbnW9NoO0 lebron
+```
+
+This will:
+1. Download the video
+2. Process it automatically
+3. Save the data ready to use in your app
 
 ## Step 1: Get Video Clips
 
