@@ -918,53 +918,40 @@ function computeCosineSimilarity(landmarks1, landmarks2) {
         return 0;
     }
     
-    // Flatten landmarks into weighted vectors (99 dimensions: 33 landmarks × 3 coordinates)
-    const vector1 = [];
-    const vector2 = [];
+    // Instead of weighting coordinates, compute cosine similarity for each important landmark
+    // and then average, OR use a simpler approach: normalize vectors first
     
-    for (let i = 0; i < 33; i++) {
-        const p1 = landmarks1[i];
-        const p2 = landmarks2[i];
-        const weight = getLandmarkWeight(i);
+    // Option 1: Compute cosine similarity on key shooting landmarks only
+    const keyLandmarks = [11, 12, 13, 14, 15, 16, 20]; // shoulders, elbows, wrists, index
+    let totalSimilarity = 0;
+    let validCount = 0;
+    
+    for (const idx of keyLandmarks) {
+        const p1 = landmarks1[idx];
+        const p2 = landmarks2[idx];
         
-        // Use 0 for invalid landmarks (consistent with normalization)
-        // Apply weight to each coordinate
-        if (!p1 || isNaN(p1[0])) {
-            vector1.push(0, 0, 0);
-        } else {
-            vector1.push(p1[0] * weight, p1[1] * weight, p1[2] * weight);
+        if (!p1 || !p2 || isNaN(p1[0]) || isNaN(p2[0])) {
+            continue;
         }
         
-        if (!p2 || isNaN(p2[0])) {
-            vector2.push(0, 0, 0);
-        } else {
-            vector2.push(p2[0] * weight, p2[1] * weight, p2[2] * weight);
+        // Compute cosine similarity for this landmark's 3D vector
+        const dot = p1[0] * p2[0] + p1[1] * p2[1] + p1[2] * p2[2];
+        const mag1 = Math.sqrt(p1[0] * p1[0] + p1[1] * p1[1] + p1[2] * p1[2]);
+        const mag2 = Math.sqrt(p2[0] * p2[0] + p2[1] * p2[1] + p2[2] * p2[2]);
+        
+        if (mag1 > 0 && mag2 > 0) {
+            const sim = dot / (mag1 * mag2);
+            // Weight by landmark importance
+            const weight = getLandmarkWeight(idx);
+            totalSimilarity += sim * weight;
+            validCount += weight;
         }
     }
     
-    // Compute weighted dot product
-    let dotProduct = 0;
-    for (let i = 0; i < vector1.length; i++) {
-        dotProduct += vector1[i] * vector2[i];
-    }
+    if (validCount === 0) return 0;
     
-    // Compute weighted magnitudes
-    let mag1 = 0;
-    let mag2 = 0;
-    for (let i = 0; i < vector1.length; i++) {
-        mag1 += vector1[i] * vector1[i];
-        mag2 += vector2[i] * vector2[i];
-    }
-    mag1 = Math.sqrt(mag1);
-    mag2 = Math.sqrt(mag2);
-    
-    // Avoid division by zero
-    if (mag1 === 0 || mag2 === 0) {
-        return 0;
-    }
-    
-    // Weighted cosine similarity = dot product / (magnitude1 × magnitude2)
-    return dotProduct / (mag1 * mag2);
+    // Return weighted average cosine similarity
+    return totalSimilarity / validCount;
 }
 
 /**
@@ -1251,6 +1238,21 @@ function compareShots() {
         // Use 3D landmarks if available, otherwise use angle-based comparison
         if (benchLandmarks.landmarkFrames.length >= 2 && userLandmarks.landmarkFrames.length >= 2) {
             // Use 3D landmark comparison (more accurate)
+            console.log('Comparing landmarks:', {
+                benchmarkFrames: benchLandmarks.landmarkFrames.length,
+                userFrames: userLandmarks.landmarkFrames.length,
+                sampleBenchmark: benchLandmarks.landmarkFrames[0] ? {
+                    rightWrist: benchLandmarks.landmarkFrames[0][16],
+                    rightElbow: benchLandmarks.landmarkFrames[0][14],
+                    rightShoulder: benchLandmarks.landmarkFrames[0][12]
+                } : null,
+                sampleUser: userLandmarks.landmarkFrames[0] ? {
+                    rightWrist: userLandmarks.landmarkFrames[0][16],
+                    rightElbow: userLandmarks.landmarkFrames[0][14],
+                    rightShoulder: userLandmarks.landmarkFrames[0][12]
+                } : null
+            });
+            
             const { distance, path } = dtwLandmarks(benchLandmarks.landmarkFrames, userLandmarks.landmarkFrames);
             userCloseness = computeUserClosenessLandmarks(benchLandmarks.landmarkFrames, userLandmarks.landmarkFrames, path);
             benchTimes = benchLandmarks.times;
