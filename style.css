@@ -786,105 +786,6 @@ canvas {
     color: #475569;
 }
 
-/* Landmark Table Styling */
-.landmark-table-section {
-    margin-top: 50px;
-    background: #ffffff;
-    padding: 30px;
-    border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-    border: 1px solid #e2e8f0;
-}
-
-.landmark-table-section h4 {
-    font-size: 1.4em;
-    font-weight: 700;
-    color: #1a202c;
-    margin-bottom: 15px;
-    letter-spacing: -0.3px;
-}
-
-.landmark-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.9em;
-    margin-top: 20px;
-    background: white;
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-.landmark-table thead {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-}
-
-.landmark-table th {
-    padding: 16px 12px;
-    text-align: left;
-    font-weight: 600;
-    font-size: 0.85em;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 2px solid rgba(255, 255, 255, 0.2);
-}
-
-.landmark-table th:first-child {
-    border-top-left-radius: 8px;
-}
-
-.landmark-table th:last-child {
-    border-top-right-radius: 8px;
-}
-
-.landmark-table tbody tr {
-    border-bottom: 1px solid #e2e8f0;
-    transition: background-color 0.2s ease;
-}
-
-.landmark-table tbody tr:hover {
-    background-color: #f8fafc;
-}
-
-.landmark-table tbody tr:last-child {
-    border-bottom: none;
-}
-
-.landmark-table td {
-    padding: 14px 12px;
-    color: #475569;
-    font-weight: 400;
-}
-
-.landmark-table td:first-child {
-    font-weight: 600;
-    color: #1a202c;
-    font-family: 'Courier New', monospace;
-}
-
-.landmark-table td:nth-child(2) {
-    font-weight: 500;
-    color: #334155;
-}
-
-.landmark-table td:nth-child(3) {
-    color: #667eea;
-    font-weight: 600;
-    font-family: 'Courier New', monospace;
-}
-
-.landmark-table td:nth-child(4),
-.landmark-table td:nth-child(5),
-.landmark-table td:nth-child(6) {
-    font-family: 'Courier New', monospace;
-    color: #475569;
-}
-
-.landmark-table td:nth-child(7) {
-    color: #64748b;
-    font-size: 0.85em;
-}
-
 @media (max-width: 768px) {
     .main-content {
         padding: 20px;
@@ -900,19 +801,6 @@ canvas {
     
     .btn {
         width: 100%;
-    }
-    
-    .landmark-table-section {
-        padding: 20px;
-    }
-    
-    .landmark-table {
-        font-size: 0.8em;
-    }
-    
-    .landmark-table th,
-    .landmark-table td {
-        padding: 10px 8px;
     }
 }
 

@@ -1,4 +1,5 @@
 // ====================== GLOBAL STATE ======================
+// Version: 2024-12-08-fixed-scoring (cache bust)
 let benchmarkPoseData = [];
 let userPoseData = [];
 let benchmarkStream = null;
@@ -101,19 +102,32 @@ function generateExampleBenchmarkData() {
     return data;
 }
 
-// Initialize professional player benchmarks with example data
+// Initialize professional player benchmarks with real or example data
 function initializeProPlayerBenchmarks() {
-    const players = ['curry', 'lebron', 'jordan', 'durant', 'clark'];
-    players.forEach(player => {
-        // Use real data for LeBron if available, otherwise use synthetic
-        if (player === 'lebron' && typeof window.lebron_benchmark_data !== 'undefined') {
-            proPlayerBenchmarks[player] = window.lebron_benchmark_data;
-            console.log(`Loaded real LeBron data: ${proPlayerBenchmarks[player].length} frames`);
-        } else {
-        proPlayerBenchmarks[player] = generateExampleBenchmarkData();
-        }
-    });
+    // Use LeBron's real data for all professional players as benchmark
+    // This provides consistent, real-world pose data until individual player videos are processed
+    if (typeof lebron_data !== 'undefined' && lebron_data && lebron_data.length > 0) {
+        // Use LeBron's data for all players - explicitly copy the array to avoid reference issues
+        const lebronDataCopy = JSON.parse(JSON.stringify(lebron_data)); // Deep copy
+        const players = ['curry', 'lebron', 'jordan', 'durant', 'clark'];
+        players.forEach(player => {
+            proPlayerBenchmarks[player] = lebronDataCopy;
+        });
+        console.log('Loaded LeBron benchmark data for all players:', lebron_data.length, 'frames');
+        console.log('Players using LeBron data:', players);
+    } else {
+        // Fallback to example data if LeBron data not available
+        const players = ['curry', 'lebron', 'jordan', 'durant', 'clark'];
+        players.forEach(player => {
+            proPlayerBenchmarks[player] = generateExampleBenchmarkData();
+        });
+        console.log('Using example benchmark data for all players');
+    }
 }
+
+// Cache buster - update this to force browser refresh
+// Version: 2024-01-15-overlay-debug-v4
+console.log('🚨🚨🚨 app.js loaded - overlay debug version v4 - IF YOU SEE THIS, NEW CODE IS LOADED! 🚨🚨🚨');
 
 // MediaPipe Pose
 let benchmarkPose = null;
@@ -202,6 +216,101 @@ function initializePose() {
 
 // ====================== UTILITY FUNCTIONS ======================
 
+/**
+ * Interpolate missing landmarks using linear interpolation
+ * Fills gaps where landmarks are NaN by interpolating between last seen and next seen positions
+ */
+function interpolateMissingLandmarks(poseData) {
+    if (!poseData || poseData.length === 0) return poseData;
+    
+    const numLandmarks = 33; // MediaPipe has 33 pose landmarks
+    const interpolatedData = JSON.parse(JSON.stringify(poseData)); // Deep copy
+    
+    // For each landmark index (0-32)
+    for (let landmarkIdx = 0; landmarkIdx < numLandmarks; landmarkIdx++) {
+        let lastValidFrame = null;
+        let lastValidValue = null;
+        
+        // First pass: find gaps and interpolate
+        for (let frameIdx = 0; frameIdx < interpolatedData.length; frameIdx++) {
+            const frame = interpolatedData[frameIdx];
+            const landmark = frame.landmarks[landmarkIdx];
+            
+            // Check if landmark is valid (not NaN)
+            const isValid = landmark && 
+                           !isNaN(landmark[0]) && 
+                           !isNaN(landmark[1]) && 
+                           !isNaN(landmark[2]);
+            
+            if (isValid) {
+                // If we have a gap to fill (lastValidFrame exists and is not adjacent)
+                if (lastValidFrame !== null && frameIdx > lastValidFrame + 1) {
+                    // Interpolate between lastValidFrame and current frame
+                    const gapStart = lastValidFrame + 1;
+                    const gapEnd = frameIdx - 1;
+                    const gapSize = gapEnd - gapStart + 1;
+                    
+                    const startValue = lastValidValue;
+                    const endValue = landmark;
+                    
+                    // Linear interpolation for each frame in the gap
+                    // Example: Frame 100 has value, Frame 110 has value, need to fill 101-109
+                    // gapStart = 101, gapEnd = 109, gapSize = 9
+                    // We interpolate from lastValidFrame (100) to frameIdx (110)
+                    // Total distance = gapSize + 2 frames (from 100 to 110)
+                    for (let gapIdx = 0; gapIdx <= gapSize; gapIdx++) {
+                        // t = 0 at lastValidFrame, t = 1 at frameIdx
+                        // For frame gapStart + gapIdx, t = (gapIdx + 1) / (gapSize + 2)
+                        // This gives: frame 101 -> t=1/11, frame 109 -> t=10/11
+                        const t = (gapIdx + 1) / (gapSize + 2);
+                        const interpolatedFrame = interpolatedData[gapStart + gapIdx];
+                        
+                        // Linear interpolation: value = start + (end - start) * t
+                        interpolatedFrame.landmarks[landmarkIdx] = [
+                            startValue[0] + (endValue[0] - startValue[0]) * t,
+                            startValue[1] + (endValue[1] - startValue[1]) * t,
+                            startValue[2] + (endValue[2] - startValue[2]) * t
+                        ];
+                    }
+                }
+                
+                // Update last valid position
+                lastValidFrame = frameIdx;
+                lastValidValue = [...landmark]; // Copy the array
+            }
+        }
+        
+        // Handle trailing gaps (if last frame is missing, keep last valid value)
+        if (lastValidFrame !== null && lastValidFrame < interpolatedData.length - 1) {
+            for (let frameIdx = lastValidFrame + 1; frameIdx < interpolatedData.length; frameIdx++) {
+                const frame = interpolatedData[frameIdx];
+                const landmark = frame.landmarks[landmarkIdx];
+                
+                if (!landmark || isNaN(landmark[0]) || isNaN(landmark[1]) || isNaN(landmark[2])) {
+                    // Use last valid value for trailing gaps
+                    frame.landmarks[landmarkIdx] = [...lastValidValue];
+                }
+            }
+        }
+        
+        // Handle leading gaps (if first frames are missing, use first valid value)
+        if (lastValidFrame !== null && lastValidFrame > 0) {
+            const firstValidValue = interpolatedData[lastValidFrame].landmarks[landmarkIdx];
+            for (let frameIdx = 0; frameIdx < lastValidFrame; frameIdx++) {
+                const frame = interpolatedData[frameIdx];
+                const landmark = frame.landmarks[landmarkIdx];
+                
+                if (!landmark || isNaN(landmark[0]) || isNaN(landmark[1]) || isNaN(landmark[2])) {
+                    // Use first valid value for leading gaps
+                    frame.landmarks[landmarkIdx] = [...firstValidValue];
+                }
+            }
+        }
+    }
+    
+    return interpolatedData;
+}
+
 function get3DPoint(landmarks, index, width, height) {
     if (!landmarks || index >= landmarks.length || landmarks[index].visibility < 0.5) {
         return null;
@@ -227,96 +336,6 @@ function calculateAngle(a, b, c) {
     
     const cosine = Math.max(-1, Math.min(1, dot / (magBA * magBC)));
     return Math.acos(cosine) * (180 / Math.PI);
-}
-
-/**
- * Normalize pose landmarks to align shoulders with x-axis.
- * This ensures consistent orientation regardless of camera angle.
- * 
- * @param {Array} landmarks - Array of 33 [x, y, z] points
- * @returns {Array} Normalized landmarks array
- */
-function normalizePoseOrientation(landmarks) {
-    if (!landmarks || landmarks.length < 33) {
-        return landmarks;
-    }
-    
-    // Get shoulder points (MediaPipe indices: 11 = left shoulder, 12 = right shoulder)
-    const leftShoulder = landmarks[11];
-    const rightShoulder = landmarks[12];
-    
-    // Check if shoulders are valid
-    if (!leftShoulder || !rightShoulder || 
-        isNaN(leftShoulder[0]) || isNaN(rightShoulder[0])) {
-        return landmarks; // Return original if shoulders not detected
-    }
-    
-    // Calculate shoulder vector (from left to right shoulder)
-    const shoulderVec = [
-        rightShoulder[0] - leftShoulder[0],
-        rightShoulder[1] - leftShoulder[1],
-        rightShoulder[2] - leftShoulder[2]
-    ];
-    
-    // Project to XZ plane (ignore Y for rotation calculation)
-    const shoulderVecXZ = [shoulderVec[0], shoulderVec[2]];
-    const shoulderMag = Math.sqrt(shoulderVecXZ[0] ** 2 + shoulderVecXZ[1] ** 2);
-    
-    if (shoulderMag < 1e-5) {
-        return landmarks; // Shoulders too close, can't determine orientation
-    }
-    
-    // Calculate angle to rotate shoulder vector to align with +X axis
-    // Ensure the vector points in +X direction (right shoulder should have higher X than left)
-    // Target: [1, 0] in XZ plane
-    const targetVec = [1, 0];
-    const currentVec = [shoulderVecXZ[0] / shoulderMag, shoulderVecXZ[1] / shoulderMag];
-    
-    // Calculate rotation angle (around Y-axis)
-    const cosAngle = currentVec[0] * targetVec[0] + currentVec[1] * targetVec[1];
-    const sinAngle = currentVec[0] * targetVec[1] - currentVec[1] * targetVec[0];
-    let angle = Math.atan2(sinAngle, cosAngle);
-    
-    // If the dot product is negative, we need to flip direction (rotate 180 degrees)
-    if (cosAngle < 0) {
-        angle += Math.PI;
-    }
-    
-    // Rotation matrix for rotation around Y-axis
-    const cos = Math.cos(-angle); // Negative to align with +X
-    const sin = Math.sin(-angle);
-    
-    // Calculate shoulder midpoint for translation
-    const shoulderMidpoint = [
-        (leftShoulder[0] + rightShoulder[0]) / 2,
-        (leftShoulder[1] + rightShoulder[1]) / 2,
-        (leftShoulder[2] + rightShoulder[2]) / 2
-    ];
-    
-    // Apply rotation and translation to all landmarks
-    const normalized = landmarks.map(landmark => {
-        if (!landmark || isNaN(landmark[0])) {
-            return [NaN, NaN, NaN];
-        }
-        
-        // Translate to origin (using shoulder midpoint)
-        const translated = [
-            landmark[0] - shoulderMidpoint[0],
-            landmark[1] - shoulderMidpoint[1],
-            landmark[2] - shoulderMidpoint[2]
-        ];
-        
-        // Rotate around Y-axis
-        const rotated = [
-            translated[0] * cos - translated[2] * sin,
-            translated[1],
-            translated[0] * sin + translated[2] * cos
-        ];
-        
-        return rotated;
-    });
-    
-    return normalized;
 }
 
 function getArmState(landmarks, width, height) {
@@ -376,7 +395,13 @@ async function startBenchmarkRecording() {
         canvas.height = 480;
         
         // Ensure video plays (non-blocking)
-        video.play().catch(err => console.error('Video play error:', err));
+        // Suppress AbortError - it's harmless and happens when video source changes
+        video.play().catch(err => {
+            // Only log if it's not an AbortError (which is expected when switching streams)
+            if (err.name !== 'AbortError') {
+                console.error('Video play error:', err);
+            }
+        });
         
         benchmarkPoseData = [];
         
@@ -432,9 +457,6 @@ async function startBenchmarkRecording() {
                     landmarks3D.push(pt || [NaN, NaN, NaN]);
                 }
                 
-                // Normalize pose orientation (align shoulders with x-axis)
-                const normalizedLandmarks = normalizePoseOrientation(landmarks3D);
-                
                 // Stage transitions
                 if (state !== previousStage) {
                     if (state === "pre_shot" && !recordingActive) {
@@ -458,7 +480,7 @@ async function startBenchmarkRecording() {
                             elbow_angle: elbowAngle,
                             wrist_angle: wristAngle,
                             arm_angle: armAngle,
-                            landmarks: normalizedLandmarks
+                            landmarks: landmarks3D
                         });
                         stopBenchmarkRecording();
                         return;
@@ -475,7 +497,7 @@ async function startBenchmarkRecording() {
                         elbow_angle: elbowAngle,
                         wrist_angle: wristAngle,
                         arm_angle: armAngle,
-                        landmarks: normalizedLandmarks
+                        landmarks: landmarks3D
                     });
                     
                     if (state === "pre_shot" || state === "follow_through") {
@@ -520,6 +542,9 @@ function stopBenchmarkRecording() {
     document.getElementById('stopBenchmark').disabled = true;
     
     if (benchmarkPoseData.length > 0) {
+        // Apply linear interpolation to fill missing landmarks
+        benchmarkPoseData = interpolateMissingLandmarks(benchmarkPoseData);
+        
         document.getElementById('benchmarkStatus').textContent = `Recorded ${benchmarkPoseData.length} frames.`;
         document.getElementById('benchmarkStatus').className = 'status success';
         document.getElementById('retakeBenchmark').style.display = 'inline-block';
@@ -554,7 +579,13 @@ async function startUserRecording() {
         canvas.height = 480;
         
         // Ensure video plays (non-blocking)
-        video.play().catch(err => console.error('Video play error:', err));
+        // Suppress AbortError - it's harmless and happens when video source changes
+        video.play().catch(err => {
+            // Only log if it's not an AbortError (which is expected when switching streams)
+            if (err.name !== 'AbortError') {
+                console.error('Video play error:', err);
+            }
+        });
         
         userPoseData = [];
         
@@ -569,6 +600,45 @@ async function startUserRecording() {
         document.getElementById('userStatus').textContent = 'Recording...';
         document.getElementById('userStatus').className = 'status recording';
         
+        // Verify overlay element exists and reset debug counter
+        window._landmarkDebugCount = 0;
+        console.log('🔍 Looking for landmarkFlashOverlay element...');
+        
+        // Wait a moment for DOM to be ready
+        setTimeout(() => {
+            const flashOverlayCheck = document.getElementById('landmarkFlashOverlay');
+            if (!flashOverlayCheck) {
+                console.error('❌ landmarkFlashOverlay element NOT FOUND in DOM!');
+                console.error('   Make sure Step 2 (step2) is visible and contains the overlay');
+                // Try to find the video container
+                const videoContainer = document.querySelector('#step2 .video-container');
+                if (videoContainer) {
+                    console.log('✅ Found video-container, but overlay is missing');
+                } else {
+                    console.error('❌ video-container also not found!');
+                }
+            } else {
+                console.log('✅ landmarkFlashOverlay element FOUND!');
+                console.log('   Element:', flashOverlayCheck);
+                console.log('   Computed display:', window.getComputedStyle(flashOverlayCheck).display);
+                console.log('   Computed z-index:', window.getComputedStyle(flashOverlayCheck).zIndex);
+                
+                // Test: briefly show overlay to confirm it works
+                flashOverlayCheck.style.display = 'block';
+                flashOverlayCheck.style.background = 'rgba(255, 0, 0, 0.8)'; // Bright red for testing
+                flashOverlayCheck.style.zIndex = '9999'; // Ensure it's on top
+                flashOverlayCheck.style.opacity = '1';
+                console.log('🔴 RED FLASH TEST - You should see a red overlay now!');
+                
+                setTimeout(() => {
+                    flashOverlayCheck.style.display = 'none';
+                    flashOverlayCheck.style.background = 'rgba(255, 255, 0, 0.5)'; // Back to yellow
+                    flashOverlayCheck.style.zIndex = '3';
+                    console.log('✅ Overlay test complete - did you see the red flash?');
+                }, 1000); // Show for 1 second
+            }
+        }, 100);
+        
         userPose.onResults((results) => {
             ctx.save();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -578,7 +648,37 @@ async function startUserRecording() {
             ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
             }
             
-            if (results.poseLandmarks) {
+            // Count visible landmarks and flash yellow overlay if < 25
+            const flashOverlay = document.getElementById('landmarkFlashOverlay');
+            if (results.poseLandmarks && results.poseLandmarks.length > 0) {
+                // Count landmarks with visibility >= 0.5 (MediaPipe visibility threshold)
+                const visibleLandmarkCount = results.poseLandmarks.filter(landmark => 
+                    landmark && landmark.visibility !== undefined && landmark.visibility >= 0.5
+                ).length;
+                
+                // Flash yellow overlay if less than 25 landmarks visible
+                if (flashOverlay) {
+                    // Always log first few frames for debugging
+                    if (!window._landmarkDebugCount) window._landmarkDebugCount = 0;
+                    if (window._landmarkDebugCount < 10) {
+                        console.log(`[DEBUG] Frame ${window._landmarkDebugCount}: ${visibleLandmarkCount}/33 landmarks, overlay display: ${flashOverlay.style.display}`);
+                        window._landmarkDebugCount++;
+                    }
+                    
+                    if (visibleLandmarkCount < 25) {
+                        // Show the overlay (CSS animation handles the pulsing)
+                        flashOverlay.style.display = 'block';
+                        flashOverlay.style.animation = 'pulseYellow 0.6s ease-in-out infinite';
+                        flashOverlay.style.opacity = '1'; // Ensure it's visible
+                        flashOverlay.style.visibility = 'visible';
+                    } else {
+                        // Hide overlay when enough landmarks are visible
+                        flashOverlay.style.display = 'none';
+                    }
+                } else {
+                    console.error('landmarkFlashOverlay element not found!');
+                }
+                
                 drawConnections(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
                     color: '#00FF00',
                     lineWidth: 2
@@ -608,9 +708,6 @@ async function startUserRecording() {
                     landmarks3D.push(pt || [NaN, NaN, NaN]);
                 }
                 
-                // Normalize pose orientation (align shoulders with x-axis)
-                const normalizedLandmarks = normalizePoseOrientation(landmarks3D);
-                
                 if (state !== previousStage) {
                     if (state === "pre_shot" && !recordingActive) {
                         recordingActive = true;
@@ -633,7 +730,7 @@ async function startUserRecording() {
                             elbow_angle: elbowAngle,
                             wrist_angle: wristAngle,
                             arm_angle: armAngle,
-                            landmarks: normalizedLandmarks
+                            landmarks: landmarks3D
                         });
                         stopUserRecording();
                         return;
@@ -649,7 +746,7 @@ async function startUserRecording() {
                         elbow_angle: elbowAngle,
                         wrist_angle: wristAngle,
                         arm_angle: armAngle,
-                        landmarks: normalizedLandmarks
+                        landmarks: landmarks3D
                     });
                     
                     if (state === "pre_shot" || state === "follow_through") {
@@ -680,6 +777,12 @@ async function startUserRecording() {
 }
 
 function stopUserRecording() {
+    // Hide the landmark flash overlay when stopping
+    const flashOverlay = document.getElementById('landmarkFlashOverlay');
+    if (flashOverlay) {
+        flashOverlay.style.display = 'none';
+    }
+    
     if (userCamera) {
         userCamera.stop();
         userCamera = null;
@@ -694,6 +797,9 @@ function stopUserRecording() {
     document.getElementById('stopUser').disabled = true;
     
     if (userPoseData.length > 0) {
+        // Apply linear interpolation to fill missing landmarks
+        userPoseData = interpolateMissingLandmarks(userPoseData);
+        
         document.getElementById('userStatus').textContent = `Recorded ${userPoseData.length} frames. Analyzing...`;
         document.getElementById('userStatus').className = 'status success';
         document.getElementById('retakeUser').style.display = 'inline-block';
@@ -713,36 +819,49 @@ function computeOverallForm(e, w, a) {
     return angles.reduce((a, b) => a + b, 0) / angles.length;
 }
 
-/**
- * Extract a single-dimensional form series from shot data.
- * Uses a weighted combination of key angles for better comparison.
- */
 function extractFormSeries(shotData) {
     const times = [];
     const formVals = [];
     for (const entry of shotData) {
-        // Use weighted combination: elbow angle is most important for shooting form
-        let measure = null;
-        if (entry.elbow_angle !== null && entry.elbow_angle !== undefined) {
-            measure = entry.elbow_angle * 0.5; // 50% weight
-            if (entry.wrist_angle !== null && entry.wrist_angle !== undefined) {
-                measure += entry.wrist_angle * 0.3; // 30% weight
-            }
-            if (entry.arm_angle !== null && entry.arm_angle !== undefined) {
-                measure += entry.arm_angle * 0.2; // 20% weight
-            }
-        } else if (entry.wrist_angle !== null && entry.wrist_angle !== undefined) {
-            measure = entry.wrist_angle;
-        } else if (entry.arm_angle !== null && entry.arm_angle !== undefined) {
-            measure = entry.arm_angle;
-        }
-        
+        const measure = computeOverallForm(entry.elbow_angle, entry.wrist_angle, entry.arm_angle);
         if (measure !== null) {
             times.push(entry.time);
             formVals.push(measure);
         }
     }
     return { times, formVals };
+}
+
+/**
+ * Smooth data using moving average to reduce spikes and noise
+ * @param {number[]} data - Array of values to smooth
+ * @param {number} windowSize - Size of the moving average window (must be odd)
+ * @returns {number[]} - Smoothed data array
+ */
+function smoothData(data, windowSize = 3) {
+    if (!data || data.length === 0) return data;
+    if (windowSize < 1) return data;
+    
+    // Ensure window size is odd
+    if (windowSize % 2 === 0) windowSize += 1;
+    
+    const halfWindow = Math.floor(windowSize / 2);
+    const smoothed = [];
+    
+    for (let i = 0; i < data.length; i++) {
+        let sum = 0;
+        let count = 0;
+        
+        // Calculate average within window
+        for (let j = Math.max(0, i - halfWindow); j <= Math.min(data.length - 1, i + halfWindow); j++) {
+            sum += data[j];
+            count++;
+        }
+        
+        smoothed.push(sum / count);
+    }
+    
+    return smoothed;
 }
 
 // Simple DTW implementation
@@ -782,14 +901,8 @@ function dtw(series1, series2) {
     return { distance: dtwMatrix[n][m], path };
 }
 
-/**
- * Compute user closeness scores based on angle differences.
- * More accurate: uses a steeper penalty curve for better discrimination.
- */
 function computeUserCloseness(benchForm, userForm, path) {
-    // More accurate alpha: for angles (0-180°), a 30° difference should be significant
-    // Formula: 100 - (diff / maxDiff) * 100, where maxDiff = 30° for 0% similarity
-    const maxAngleDiff = 30.0; // 30° difference = 0% similarity
+    const alpha = 2.0;
     const userMap = {};
     
     for (const [i, j] of path) {
@@ -803,12 +916,10 @@ function computeUserCloseness(benchForm, userForm, path) {
             const iList = userMap[j];
             const iMid = iList[Math.floor(iList.length / 2)];
             const diff = Math.abs(userForm[j] - benchForm[iMid]);
-            // Linear scaling: 0° diff = 100%, 30° diff = 0%
-            const score = Math.max(0, Math.min(100, 100 - (diff / maxAngleDiff) * 100));
+            const score = Math.max(0, Math.min(100, 100 - alpha * diff));
             userCloseness.push(score);
         } else {
-            // If no match found, give a neutral score (not 100%)
-            userCloseness.push(50);
+            userCloseness.push(100);
         }
     }
     return userCloseness;
@@ -823,18 +934,33 @@ function compareShots() {
     document.getElementById('results').style.display = 'none';
     
     setTimeout(() => {
+        // Apply interpolation to user data before comparison (safety check)
+        const interpolatedUserData = interpolateMissingLandmarks(userPoseData);
+        
         // For pro players, use pre-loaded benchmark; for custom, use recorded benchmark
         let benchmarkData = benchmarkPoseData;
         
         if (selectedPlayer && selectedPlayer !== 'custom') {
             // Use pre-loaded benchmark for pro player
-            if (proPlayerBenchmarks[selectedPlayer] && proPlayerBenchmarks[selectedPlayer].length > 0) {
-                benchmarkData = proPlayerBenchmarks[selectedPlayer];
-            } else {
-                // Initialize if needed
+            // Ensure benchmarks are initialized
+            if (!proPlayerBenchmarks[selectedPlayer] || proPlayerBenchmarks[selectedPlayer].length === 0) {
                 initializeProPlayerBenchmarks();
-                benchmarkData = proPlayerBenchmarks[selectedPlayer];
             }
+            
+            // Force use of LeBron's data for all players
+            if (typeof lebron_data !== 'undefined' && lebron_data && lebron_data.length > 0) {
+                benchmarkData = lebron_data;
+                console.log(`Using LeBron data for ${selectedPlayer}, frames: ${lebron_data.length}`);
+            } else if (proPlayerBenchmarks[selectedPlayer] && proPlayerBenchmarks[selectedPlayer].length > 0) {
+                benchmarkData = proPlayerBenchmarks[selectedPlayer];
+                console.log(`Using benchmark data for ${selectedPlayer}, frames: ${benchmarkData.length}`);
+            } else {
+                console.warn(`No benchmark data found for ${selectedPlayer}, using example data`);
+                benchmarkData = generateExampleBenchmarkData();
+            }
+        } else {
+            // Apply interpolation to custom benchmark data
+            benchmarkData = interpolateMissingLandmarks(benchmarkData);
         }
         
         // Check if we have valid benchmark data
@@ -843,13 +969,13 @@ function compareShots() {
             return;
         }
         
-        if (userPoseData.length === 0) {
+        if (interpolatedUserData.length === 0) {
             document.getElementById('loading').innerHTML = '<p style="color: red;">No user shot data found. Please record your shot again.</p>';
             return;
         }
         
         const benchForm = extractFormSeries(benchmarkData);
-        const userForm = extractFormSeries(userPoseData);
+        const userForm = extractFormSeries(interpolatedUserData);
         
         if (benchForm.times.length < 2 || userForm.times.length < 2) {
             document.getElementById('loading').innerHTML = '<p style="color: red;">Insufficient data for comparison. Please record again.</p>';
@@ -857,7 +983,11 @@ function compareShots() {
         }
         
         const { distance, path } = dtw(benchForm.formVals, userForm.formVals);
-        const userCloseness = computeUserCloseness(benchForm.formVals, userForm.formVals, path);
+        let userCloseness = computeUserCloseness(benchForm.formVals, userForm.formVals, path);
+        
+        // Smooth the userCloseness data using moving average to reduce spikes
+        // Apply smoothing twice for better results (equivalent to a larger window)
+        userCloseness = smoothData(userCloseness, 5); // 5-point moving average
         
         const avgCloseness = userCloseness.reduce((a, b) => a + b, 0) / userCloseness.length;
         
@@ -938,7 +1068,9 @@ function displayResults(data) {
                 borderColor: 'rgb(54, 162, 235)',
                 borderWidth: 2,
                 fill: false,
-                tension: 0.1
+                tension: 0.4, // Increased tension for smoother curves
+                pointRadius: 0, // Remove points for cleaner look
+                pointHoverRadius: 4
             }]
         },
         options: {
@@ -1108,13 +1240,55 @@ function generatePlayerSpecificFeedback(data) {
     const wristDiff = Math.abs(avgWristAngle - feedback.idealWrist);
     const armDiff = Math.abs(avgArmAngle - feedback.idealArm);
     
+    // Calculate scores using improved percentage-based formula
+    // Use larger maxDiff values to be more lenient and avoid 0% scores
+    // For angles, a difference of up to 180° is possible, so we use 180 as max
+    const maxElbowDiff = 180;
+    const maxWristDiff = 180;
+    const maxArmDiff = 180;
+    
+    // Calculate raw scores
+    let elbowScoreRaw = 100 * (1 - elbowDiff / maxElbowDiff);
+    let wristScoreRaw = 100 * (1 - wristDiff / maxWristDiff);
+    let armScoreRaw = 100 * (1 - armDiff / maxArmDiff);
+    
+    // Clamp and ensure valid numbers
+    const elbowScore = Math.max(0, Math.min(100, isNaN(elbowScoreRaw) ? 0 : elbowScoreRaw));
+    const wristScore = Math.max(0, Math.min(100, isNaN(wristScoreRaw) ? 0 : wristScoreRaw));
+    const armScore = Math.max(0, Math.min(100, isNaN(armScoreRaw) ? 0 : armScoreRaw));
+    
+    // Debug logging with detailed calculation
+    console.log('=== ANGLE SCORE CALCULATION ===');
+    console.log('Elbow:', {
+        value: avgElbowAngle,
+        ideal: feedback.idealElbow,
+        diff: elbowDiff,
+        rawScore: elbowScoreRaw,
+        finalScore: elbowScore
+    });
+    console.log('Wrist:', {
+        value: avgWristAngle,
+        ideal: feedback.idealWrist,
+        diff: wristDiff,
+        rawScore: wristScoreRaw,
+        finalScore: wristScore
+    });
+    console.log('Arm:', {
+        value: avgArmAngle,
+        ideal: feedback.idealArm,
+        diff: armDiff,
+        rawScore: armScoreRaw,
+        finalScore: armScore
+    });
+    console.log('===============================');
+    
     // Generate strengths
     if (elbowDiff < 15) {
         feedback.strengths.push({
             title: 'Elbow Extension',
             value: `${avgElbowAngle.toFixed(1)}°`,
             ideal: `${feedback.idealElbow}°`,
-            score: Math.max(0, 100 - (elbowDiff * 2))
+            score: elbowScore
         });
     }
     if (wristDiff < 10) {
@@ -1122,7 +1296,7 @@ function generatePlayerSpecificFeedback(data) {
             title: 'Wrist Snap',
             value: `${avgWristAngle.toFixed(1)}°`,
             ideal: `${feedback.idealWrist}°`,
-            score: Math.max(0, 100 - (wristDiff * 3))
+            score: wristScore
         });
     }
     if (armDiff < 8) {
@@ -1130,7 +1304,7 @@ function generatePlayerSpecificFeedback(data) {
             title: 'Arm Angle',
             value: `${avgArmAngle.toFixed(1)}°`,
             ideal: `${feedback.idealArm}°`,
-            score: Math.max(0, 100 - (armDiff * 4))
+            score: armScore
         });
     }
     if (avgCloseness > 75) {
@@ -1148,7 +1322,7 @@ function generatePlayerSpecificFeedback(data) {
             title: 'Elbow Extension',
             value: `${avgElbowAngle.toFixed(1)}°`,
             ideal: `${feedback.idealElbow}°`,
-            score: Math.max(0, 100 - (elbowDiff * 2)),
+            score: elbowScore,
             tip: player === 'curry' ? 'Focus on a smooth, continuous motion from your set point to release. Curry\'s one-motion shot requires full elbow extension.' : 'Work on fully extending your elbow at the point of release.'
         });
     }
@@ -1157,7 +1331,7 @@ function generatePlayerSpecificFeedback(data) {
             title: 'Wrist Snap',
             value: `${avgWristAngle.toFixed(1)}°`,
             ideal: `${feedback.idealWrist}°`,
-            score: Math.max(0, 100 - (wristDiff * 3)),
+            score: wristScore,
             tip: player === 'curry' ? 'The wrist snap is crucial for Curry\'s one-motion shot. Practice a quick, decisive flick at the end of your shooting motion.' : 'Improve your wrist snap timing and angle for better ball control.'
         });
     }
@@ -1166,7 +1340,7 @@ function generatePlayerSpecificFeedback(data) {
             title: 'Arm Angle',
             value: `${avgArmAngle.toFixed(1)}°`,
             ideal: `${feedback.idealArm}°`,
-            score: Math.max(0, 100 - (armDiff * 4)),
+            score: armScore,
             tip: player === 'durant' ? 'Durant\'s high release comes from optimal arm angle. Keep your shooting arm at the right angle for maximum elevation.' : 'Adjust your arm angle to match the ideal shooting form.'
         });
     }
@@ -1212,11 +1386,24 @@ function generatePlayerSpecificFeedback(data) {
     // Generate summary
     feedback.summary = `Compared to ${feedback.name}'s ${feedback.niche}, your shot shows ${avgCloseness > 75 ? 'strong' : avgCloseness > 60 ? 'moderate' : 'room for improvement in'} similarity. ${nicheFeedback}`;
     
-    // Add all metrics
+    // Add all metrics (using scores already calculated above)
+    // Ensure all scores are valid numbers
+    const finalElbowScore = isNaN(elbowScore) ? 0 : Math.max(0, Math.min(100, elbowScore));
+    const finalWristScore = isNaN(wristScore) ? 0 : Math.max(0, Math.min(100, wristScore));
+    const finalArmScore = isNaN(armScore) ? 0 : Math.max(0, Math.min(100, armScore));
+    
+    console.log('Final metric scores:', {
+        elbow: finalElbowScore,
+        wrist: finalWristScore,
+        arm: finalArmScore,
+        overall: avgCloseness,
+        niche: nicheScore
+    });
+    
     feedback.metrics = [
-        { label: 'Elbow Angle', value: `${avgElbowAngle.toFixed(1)}°`, ideal: `${feedback.idealElbow}°`, score: Math.max(0, 100 - elbowDiff * 2) },
-        { label: 'Wrist Angle', value: `${avgWristAngle.toFixed(1)}°`, ideal: `${feedback.idealWrist}°`, score: Math.max(0, 100 - wristDiff * 3) },
-        { label: 'Arm Angle', value: `${avgArmAngle.toFixed(1)}°`, ideal: `${feedback.idealArm}°`, score: Math.max(0, 100 - armDiff * 4) },
+        { label: 'Elbow Angle', value: `${avgElbowAngle.toFixed(1)}°`, ideal: `${feedback.idealElbow}°`, score: finalElbowScore },
+        { label: 'Wrist Angle', value: `${avgWristAngle.toFixed(1)}°`, ideal: `${feedback.idealWrist}°`, score: finalWristScore },
+        { label: 'Arm Angle', value: `${avgArmAngle.toFixed(1)}°`, ideal: `${feedback.idealArm}°`, score: finalArmScore },
         { label: 'Overall Score', value: `${avgCloseness.toFixed(1)}%`, ideal: '100%', score: avgCloseness },
         { label: `${feedback.niche} Similarity`, value: `${nicheScore.toFixed(1)}%`, ideal: '100%', score: nicheScore }
     ];
@@ -1368,6 +1555,16 @@ function populateFeedbackContent(feedback, playerName) {
             console.log('Displaying', feedback.metrics.length, 'metrics');
             metricsList.innerHTML = '';
             feedback.metrics.forEach(metric => {
+                // Ensure score is a valid number
+                let score = metric.score;
+                if (isNaN(score) || score === null || score === undefined) {
+                    console.warn(`Invalid score for ${metric.label}:`, score);
+                    score = 0;
+                }
+                score = Math.max(0, Math.min(100, Number(score)));
+                
+                console.log(`Metric: ${metric.label}, Score: ${score}, Value: ${metric.value}, Ideal: ${metric.ideal}`);
+                
                 const item = document.createElement('div');
                 item.className = 'metric-item';
                 item.innerHTML = `
@@ -1375,9 +1572,9 @@ function populateFeedbackContent(feedback, playerName) {
                     <div class="metric-value">${metric.value}</div>
                     <div class="metric-ideal">Ideal: ${metric.ideal}</div>
                     <div class="metric-bar">
-                        <div class="metric-bar-fill" style="width: ${Math.max(0, Math.min(100, metric.score))}%"></div>
+                        <div class="metric-bar-fill" style="width: ${score}%"></div>
                     </div>
-                    <div class="metric-score">${metric.score.toFixed(0)}%</div>
+                    <div class="metric-score">${score.toFixed(0)}%</div>
                 `;
                 metricsList.appendChild(item);
             });
